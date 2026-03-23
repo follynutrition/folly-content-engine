@@ -2,8 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { PhaseStepper } from '@/components/PhaseStepper';
 import { RunHome } from '@/views/RunHome';
-import { Research } from '@/views/Research';
-import { TopicImport } from '@/views/TopicImport';
+import { ResearchAndTopics } from '@/views/ResearchAndTopics';
 import { ContentGeneration } from '@/views/ContentGeneration';
 import { ImageGeneration } from '@/views/ImageGeneration';
 import { Review } from '@/views/Review';
@@ -93,7 +92,7 @@ export default function App() {
   const advancePhase = useCallback(() => {
     if (activeSegment) {
       const current = stateRef.current.runs[stateRef.current.activeRunId]?.segments[activeSegment]?.phase ?? 0;
-      actions.setSegmentPhase(activeSegment, Math.min(current + 1, 6));
+      actions.setSegmentPhase(activeSegment, Math.min(current + 1, 5));
     }
   }, [activeSegment, actions]);
 
@@ -109,7 +108,7 @@ export default function App() {
           onHome={goHome}
         />
 
-        {activeSegment && currentPhase < 6 && (
+        {activeSegment && currentPhase < 5 && (
           <PhaseStepper
             segmentId={activeSegment}
             currentPhase={currentPhase}
@@ -123,25 +122,22 @@ export default function App() {
           )}
 
           {activeSegment && currentPhase === 0 && (
-            <Research segmentId={activeSegment} onComplete={advancePhase} />
+            <ResearchAndTopics segmentId={activeSegment} onComplete={advancePhase} />
           )}
           {activeSegment && currentPhase === 1 && (
-            <TopicImport segmentId={activeSegment} onComplete={advancePhase} />
-          )}
-          {activeSegment && currentPhase === 2 && (
             <ContentGeneration segmentId={activeSegment} onComplete={advancePhase} />
           )}
-          {activeSegment && currentPhase === 3 && (
+          {activeSegment && currentPhase === 2 && (
             <ImageGeneration segmentId={activeSegment} onComplete={advancePhase} />
           )}
-          {activeSegment && currentPhase === 4 && (
+          {activeSegment && currentPhase === 3 && (
             <Review segmentId={activeSegment} onComplete={advancePhase} />
           )}
-          {activeSegment && currentPhase === 5 && (
+          {activeSegment && currentPhase === 4 && (
             <Publish segmentId={activeSegment} onComplete={advancePhase} />
           )}
 
-          {activeSegment && currentPhase >= 6 && (
+          {activeSegment && currentPhase >= 5 && (
             <div className="text-center py-20">
               <div className="w-[52px] h-[52px] rounded-full bg-success flex items-center justify-center mx-auto mb-4 text-xl text-white">
                 ✓

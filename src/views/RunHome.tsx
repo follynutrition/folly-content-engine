@@ -7,12 +7,11 @@ interface RunHomeProps {
 }
 
 const PHASE_CTAS: Record<number, string> = {
-  0: 'Start Research',
-  1: 'Review Topics',
-  2: 'Generate Content',
-  3: 'QA Images',
-  4: 'Review Packages',
-  5: 'Publish',
+  0: 'Research & Topics',
+  1: 'Generate Content',
+  2: 'QA Images',
+  3: 'Review Packages',
+  4: 'Publish',
 };
 
 export function RunHome({ onSegmentSelect }: RunHomeProps) {
@@ -56,8 +55,8 @@ export function RunHome({ onSegmentSelect }: RunHomeProps) {
           const segState = run?.segments[s.id];
           const phase = segState?.phase ?? 0;
           const phaseInfo = PHASES[Math.min(phase, 5)];
-          const pct = (phase / 6) * 100;
-          const done = phase >= 6;
+          const pct = (phase / 5) * 100;
+          const done = phase >= 5;
 
           return (
             <div

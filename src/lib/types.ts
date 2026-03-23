@@ -74,19 +74,18 @@ export interface ComplianceFlag {
   match?: string;
 }
 
-export type PhaseId = 'research' | 'topics' | 'content' | 'images' | 'review' | 'publish';
+export type PhaseId = 'research' | 'content' | 'images' | 'review' | 'publish';
 
 export const PHASES: { id: PhaseId; label: string; index: number }[] = [
-  { id: 'research', label: 'Research', index: 0 },
-  { id: 'topics', label: 'Topics', index: 1 },
-  { id: 'content', label: 'Content', index: 2 },
-  { id: 'images', label: 'Images', index: 3 },
-  { id: 'review', label: 'Review', index: 4 },
-  { id: 'publish', label: 'Publish', index: 5 },
+  { id: 'research', label: 'Research & Topics', index: 0 },
+  { id: 'content', label: 'Content', index: 1 },
+  { id: 'images', label: 'Images', index: 2 },
+  { id: 'review', label: 'Review', index: 3 },
+  { id: 'publish', label: 'Publish', index: 4 },
 ];
 
 export interface SegmentState {
-  phase: number; // 0-6 (6 = complete)
+  phase: number; // 0-5 (5 = complete)
   topics: TopicBrief[];
   packages: ContentPackage[];
   schedule: ScheduleEntry[];
