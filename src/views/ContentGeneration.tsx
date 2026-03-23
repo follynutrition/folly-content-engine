@@ -5,7 +5,7 @@ import { generatePackage, generateMockPackage } from '@/lib/claude-api';
 import type { PubMedSource } from '@/lib/claude-api';
 import { generateImage } from '@/lib/gemini-api';
 import { scanPackage, hasHardFlags } from '@/lib/compliance-scanner';
-import { CaretDown, CaretUp, Check, SpinnerGap, Image as ImageIcon, X, ArrowsClockwise } from '@phosphor-icons/react';
+import { CaretDown, CaretUp, Check, SpinnerGap, Image as ImageIcon, X } from '@phosphor-icons/react';
 import type { ContentPackage } from '@/lib/types';
 
 interface ContentGenerationProps {
