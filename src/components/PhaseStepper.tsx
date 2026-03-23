@@ -3,12 +3,11 @@ import { getSegment } from '@/lib/config';
 import {
   MagnifyingGlass,
   PencilSimpleLine,
-  ImageSquare,
   CheckCircle,
   Rocket,
 } from '@phosphor-icons/react';
 
-const phaseIcons = [MagnifyingGlass, PencilSimpleLine, ImageSquare, CheckCircle, Rocket];
+const phaseIcons = [MagnifyingGlass, PencilSimpleLine, CheckCircle, Rocket];
 
 interface PhaseStepperProps {
   segmentId: string;

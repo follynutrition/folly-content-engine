@@ -40,6 +40,15 @@ function extractPhrases(text: string, minLength: number): string[] {
 export function scanPackage(pkg: ContentPackage): ComplianceFlag[] {
   const flags: ComplianceFlag[] = [];
 
+  // Hard flag suggestion lookup
+  const hardSuggestions: Record<string, string> = {
+    'medical-regrowth': "Replace with 'hair health' or 'hair strength'",
+    'medical-treats': "Replace with 'supports' or 'promotes'",
+    'medical-clinically-proven': "Replace with 'Clinically Studied'",
+    'competitor-name-in-blog': 'Remove competitor name from blog body',
+    'medical-diagnosis': "Remove or add 'talk to your doctor'",
+  };
+
   // 1. Hard flags — regex patterns
   for (const rule of complianceRules.hard_flags.rules) {
     const regex = new RegExp(rule.pattern, rule.case_sensitive ? 'g' : 'gi');
@@ -54,6 +63,7 @@ export function scanPackage(pkg: ContentPackage): ComplianceFlag[] {
           field,
           message: rule.message.replace('{{match}}', m[0]),
           match: m[0],
+          suggestion: hardSuggestions[rule.id],
         });
       }
     }
@@ -72,6 +82,7 @@ export function scanPackage(pkg: ContentPackage): ComplianceFlag[] {
           severity: 'soft',
           field: rule.field,
           message: rule.message.replace('{{count}}', String(count)),
+          suggestion: `Reduce to ${rule.max} characters`,
         });
       }
     } else if (rule.type === 'word_count') {
@@ -82,6 +93,7 @@ export function scanPackage(pkg: ContentPackage): ComplianceFlag[] {
           severity: 'soft',
           field: rule.field,
           message: rule.message.replace('{{count}}', String(count)),
+          suggestion: `Reduce to ${rule.max} words`,
         });
       }
       if (rule.min !== undefined && count < rule.min) {
@@ -90,6 +102,7 @@ export function scanPackage(pkg: ContentPackage): ComplianceFlag[] {
           severity: 'soft',
           field: rule.field,
           message: rule.message.replace('{{count}}', String(count)),
+          suggestion: `Expand to at least ${rule.min} words`,
         });
       }
     }
@@ -109,10 +122,18 @@ export function scanPackage(pkg: ContentPackage): ComplianceFlag[] {
           field,
           message: slopConfig.message.replace('{{match}}', phrase),
           match: phrase,
+          suggestion: "Rewrite in Luna's natural voice",
         });
       }
     }
   }
+
+  // Brand flag suggestion lookup
+  const brandSuggestions: Record<string, string> = {
+    'urgency-language': 'Remove pressure language — Folly uses education, not urgency',
+    'cancel-anytime': "Remove 'cancel anytime' — brand rule",
+    'percentage-off': 'Use $1 first month framing instead of discounts',
+  };
 
   // 4. Brand flags — regex patterns
   for (const rule of complianceRules.brand_flags.rules) {
@@ -128,6 +149,7 @@ export function scanPackage(pkg: ContentPackage): ComplianceFlag[] {
           field,
           message: rule.message.replace('{{match}}', m[0]),
           match: m[0],
+          suggestion: brandSuggestions[rule.id] ?? 'Review brand guidelines',
         });
       }
     }
@@ -149,6 +171,7 @@ export function scanPackage(pkg: ContentPackage): ComplianceFlag[] {
             field: 'email_body',
             message: leakConfig.message.replace('{{match}}', phrase),
             match: phrase,
+            suggestion: 'Rephrase the email teaser to hint without revealing the blog payoff',
           });
           // One payoff leak flag is enough signal
           break;

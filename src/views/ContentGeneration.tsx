@@ -5,7 +5,7 @@ import { generatePackage, generateMockPackage } from '@/lib/claude-api';
 import type { PubMedSource } from '@/lib/claude-api';
 import { generateImage } from '@/lib/gemini-api';
 import { scanPackage, hasHardFlags } from '@/lib/compliance-scanner';
-import { CaretDown, CaretUp, Check, SpinnerGap, Image as ImageIcon } from '@phosphor-icons/react';
+import { CaretDown, CaretUp, Check, SpinnerGap, Image as ImageIcon, X, ArrowsClockwise } from '@phosphor-icons/react';
 import type { ContentPackage } from '@/lib/types';
 
 interface ContentGenerationProps {
@@ -97,8 +97,10 @@ export function ContentGeneration({ segmentId, onComplete }: ContentGenerationPr
         let pkg: ContentPackage;
         try {
           pkg = await generatePackage(topic, sources);
+          pkg.generatedBy = 'claude';
         } catch {
           pkg = generateMockPackage(topic);
+          pkg.generatedBy = 'mock';
         }
 
         // Step 3: Run compliance scan
@@ -180,6 +182,16 @@ export function ContentGeneration({ segmentId, onComplete }: ContentGenerationPr
                       }}
                     >
                       {flag.severity === 'hard' ? '⚠ COMPLIANCE' : '⚠'} {flag.message}
+                      {flag.suggestion && (
+                        <span
+                          className="ml-1 cursor-pointer hover:brightness-125 transition-[filter]"
+                          style={{ color: flag.severity === 'hard' ? '#f0a0a0' : '#e8d088' }}
+                          title="Click to copy suggestion"
+                          onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(flag.suggestion!); }}
+                        >
+                          → {flag.suggestion}
+                        </span>
+                      )}
                     </span>
                   ))}
                   {pkg.complianceFlags.length > 3 && (
@@ -205,6 +217,18 @@ export function ContentGeneration({ segmentId, onComplete }: ContentGenerationPr
                       </span>
                     )}
                     <span className="text-[11px] text-neutral-600 font-mono">{pkg.wordCount}w</span>
+                    {pkg.generatedBy && (
+                      <span
+                        className="text-[9px] font-mono flex items-center gap-1"
+                        style={{ color: pkg.generatedBy === 'claude' ? 'var(--color-success)' : '#d4a843' }}
+                      >
+                        <span
+                          className="w-[5px] h-[5px] rounded-full inline-block"
+                          style={{ backgroundColor: pkg.generatedBy === 'claude' ? 'var(--color-success)' : '#d4a843' }}
+                        />
+                        {pkg.generatedBy === 'claude' ? 'CLAUDE' : 'MOCK'}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="text-[11px] text-neutral-600 mb-2">
@@ -256,19 +280,42 @@ export function ContentGeneration({ segmentId, onComplete }: ContentGenerationPr
                     />
                   </div>
 
-                  {/* Images row */}
+                  {/* Images row with QA controls */}
                   <div className="flex gap-2">
                     {[
-                      { url: pkg.blogImageUrl, label: 'BLOG IMAGE', generating: pkg.blogImageGenerating },
-                      { url: pkg.emailImageUrl, label: 'EMAIL IMAGE', generating: pkg.emailImageGenerating },
+                      { url: pkg.blogImageUrl, label: 'BLOG', type: 'blog' as const, generating: pkg.blogImageGenerating, status: pkg.blogImageStatus },
+                      { url: pkg.emailImageUrl, label: 'EMAIL', type: 'email' as const, generating: pkg.emailImageGenerating, status: pkg.emailImageStatus },
                     ].map(img => (
-                      <div key={img.label} className="flex-1 h-[80px] rounded-lg overflow-hidden flex items-center justify-center bg-neutral-900 border border-neutral-700">
+                      <div key={img.label} className="flex-1 h-[100px] rounded-lg overflow-hidden relative flex items-center justify-center bg-neutral-900" style={{ border: img.status === 'accepted' ? '2px solid var(--color-success)' : '1px solid var(--color-neutral-700)' }}>
                         {img.generating ? (
                           <div className="skeleton w-[60%] h-[40%]" />
                         ) : img.url ? (
-                          <img src={img.url} alt={img.label} className="w-full h-full object-cover" />
+                          <>
+                            <img src={img.url} alt={img.label} className="w-full h-full object-cover" />
+                            {img.status === 'accepted' && (
+                              <div className="absolute top-1.5 right-1.5 w-[18px] h-[18px] rounded-full bg-success flex items-center justify-center">
+                                <Check weight="bold" size={10} className="text-white" />
+                              </div>
+                            )}
+                            {img.status !== 'accepted' && (
+                              <div className="absolute bottom-0 left-0 right-0 flex justify-center gap-1 p-1.5" style={{ background: 'rgba(20,18,16,0.85)', backdropFilter: 'blur(4px)' }}>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setPackages(prev => prev.map(p => p.id === pkg.id ? { ...p, [`${img.type}ImageStatus`]: 'accepted' } : p)); }}
+                                  className="px-2 py-[3px] rounded-[5px] border-none bg-success text-white text-[10px] cursor-pointer font-semibold flex items-center gap-1"
+                                >
+                                  <Check weight="bold" size={9} /> Accept
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); generateImageForPackage(pkg.id, pkg, img.type); }}
+                                  className="px-2 py-[3px] rounded-[5px] border-none bg-error text-white text-[10px] cursor-pointer font-semibold flex items-center gap-1"
+                                >
+                                  <X weight="bold" size={9} /> Regen
+                                </button>
+                              </div>
+                            )}
+                          </>
                         ) : (
-                          <span className="text-[9px] font-mono text-neutral-600">{img.label}</span>
+                          <span className="text-[9px] font-mono text-neutral-600">{img.label} IMAGE</span>
                         )}
                       </div>
                     ))}

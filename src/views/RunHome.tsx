@@ -8,10 +8,9 @@ interface RunHomeProps {
 
 const PHASE_CTAS: Record<number, string> = {
   0: 'Research & Topics',
-  1: 'Generate Content',
-  2: 'QA Images',
-  3: 'Review Packages',
-  4: 'Publish',
+  1: 'Generate Content & Images',
+  2: 'Review Packages',
+  3: 'Publish',
 };
 
 export function RunHome({ onSegmentSelect }: RunHomeProps) {
@@ -30,16 +29,48 @@ export function RunHome({ onSegmentSelect }: RunHomeProps) {
     ([phase, count]) => count >= 3 && Number(phase) >= 2 && Number(phase) <= 4
   );
 
-  const totalPublished = segments.filter(s => (run?.segments[s.id]?.phase ?? 0) >= 6).length;
-  const totalPackages = totalPublished * 25;
+  // Global stats across all segments
+  const stats = segments.reduce((acc, seg) => {
+    const segState = run?.segments[seg.id];
+    const pkgs = segState?.packages ?? [];
+    acc.total += pkgs.length;
+    acc.approved += pkgs.filter(p => p.status === 'approved').length;
+    acc.pending += pkgs.filter(p => p.status === 'pending' || p.status === 'needs_edit').length;
+    acc.flagged += pkgs.filter(p => p.complianceFlags?.length > 0).length;
+    acc.published += pkgs.filter(p => p.status === 'published').length;
+    return acc;
+  }, { total: 0, approved: 0, pending: 0, flagged: 0, published: 0 });
 
   return (
     <div className="max-w-[700px] mx-auto py-10">
       <h1 className="text-[26px] font-semibold mb-1">{run?.label ?? 'March 2026'}</h1>
-      <p className="text-neutral-500 text-sm mb-8">
-        Content Engine · 4 segments ·{' '}
-        {totalPackages > 0 ? `${totalPackages} packages published` : 'ready to start'}
+      <p className="text-neutral-500 text-sm mb-1">
+        Content Engine · 4 segments · <span className="font-mono text-[10px] text-neutral-600">⌘K search</span>
       </p>
+
+      {/* Global stats bar */}
+      {stats.total > 0 && (
+        <div className="flex gap-6 mb-6 mt-3">
+          <div>
+            <div className="text-2xl font-bold text-neutral-50 font-mono">{stats.approved}</div>
+            <div className="text-[10px] text-neutral-500 font-mono tracking-wide">APPROVED</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-warning font-mono">{stats.pending}</div>
+            <div className="text-[10px] text-neutral-500 font-mono tracking-wide">PENDING</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-error font-mono">{stats.flagged}</div>
+            <div className="text-[10px] text-neutral-500 font-mono tracking-wide">FLAGGED</div>
+          </div>
+          <div>
+            <div className="text-2xl font-bold text-success font-mono">{stats.total}</div>
+            <div className="text-[10px] text-neutral-500 font-mono tracking-wide">TOTAL</div>
+          </div>
+        </div>
+      )}
+
+      {stats.total === 0 && <div className="mb-6" />}
 
       {batchPhase && (
         <div className="mb-6 p-4 rounded-xl border border-primary-500/20 bg-primary-500/5">
@@ -54,9 +85,9 @@ export function RunHome({ onSegmentSelect }: RunHomeProps) {
         {segments.map(s => {
           const segState = run?.segments[s.id];
           const phase = segState?.phase ?? 0;
-          const phaseInfo = PHASES[Math.min(phase, 5)];
-          const pct = (phase / 5) * 100;
-          const done = phase >= 5;
+          const phaseInfo = PHASES[Math.min(phase, 3)];
+          const pct = (phase / 4) * 100;
+          const done = phase >= 4;
 
           return (
             <div

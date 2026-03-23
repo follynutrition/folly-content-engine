@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useStore } from '@/lib/store';
 import { getSegment } from '@/lib/config';
+import { buildEmailHtml } from '@/lib/email-builder';
 import { Kbd } from '@/components/Kbd';
 import { scanPackage, hasHardFlags } from '@/lib/compliance-scanner';
 import { repromptBlog, repromptEmail } from '@/lib/claude-api';
@@ -26,15 +27,27 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [editValues, setEditValues] = useState<Partial<ContentPackage>>({});
 
+  // Email panel mode: 'preview' shows iframe, 'edit' shows editable fields
+  const [emailPanelMode, setEmailPanelMode] = useState<'preview' | 'edit'>('preview');
+
   // Reprompt state
   const [reprompting, setReprompting] = useState(false);
   const [repromptInstruction, setRepromptInstruction] = useState('');
   const [repromptLoading, setRepromptLoading] = useState<'blog' | 'email' | null>(null);
   const repromptInputRef = useRef<HTMLInputElement>(null);
 
+  // Batch approve state
+  const [batchConfirm, setBatchConfirm] = useState(false);
+
   const color = seg?.color ?? '#E8457A';
   const pkg = packages[cur];
   const pending = packages.filter(p => p.status === 'pending' || p.status === 'needs_edit').length;
+
+  // Build email HTML for iframe preview — recomputes when the current package changes
+  const emailPreviewHtml = useMemo(() => {
+    if (!pkg) return '';
+    return buildEmailHtml(pkg, color, '#');
+  }, [pkg, color]);
 
   // Use refs for values accessed inside the keyboard handler to keep the effect stable
   const curRef = useRef(cur);
@@ -309,6 +322,16 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
               }}
             >
               {flag.message}
+              {flag.suggestion && (
+                <span
+                  className="ml-1 cursor-pointer hover:brightness-125 transition-[filter]"
+                  style={{ color: flag.severity === 'hard' ? '#f0a0a0' : '#e8d088' }}
+                  title="Click to copy suggestion"
+                  onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(flag.suggestion!); }}
+                >
+                  → {flag.suggestion}
+                </span>
+              )}
             </span>
           ))}
         </div>
@@ -372,74 +395,115 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
 
         {/* Email Preview */}
         <div className="flex-[45%]">
-          <div className="text-[10px] text-neutral-600 font-mono tracking-wide uppercase mb-2">Email Preview</div>
-          <div className="bg-white rounded-[10px] text-neutral-950 overflow-hidden">
-            {/* Subject + preview */}
-            <div className="p-3.5 bg-neutral-50 border-b border-neutral-100">
-              {repromptLoading === 'email' ? (
-                <div className="flex flex-col gap-1.5">
-                  <ShimmerBlock height="16px" />
-                  <ShimmerBlock height="12px" />
-                </div>
-              ) : editing ? (
-                <>
-                  <input
-                    defaultValue={editValues.subjectLine ?? pkg.subjectLine}
-                    onChange={e => setEditValues(prev => ({ ...prev, subjectLine: e.target.value }))}
-                    className="w-full text-xs font-semibold border border-dashed border-neutral-400 rounded p-1 bg-white"
-                  />
-                  <div className="text-[10px] text-neutral-400 text-right mt-0.5">
-                    {(editValues.subjectLine ?? pkg.subjectLine).length}/50
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="text-xs font-semibold">{pkg.subjectLine}</div>
-                  <div className="text-[10px] text-neutral-400 mt-0.5">{pkg.previewText}</div>
-                </>
-              )}
-            </div>
-
-            {/* Hero image */}
-            <div
-              className="w-full h-[80px] flex items-center justify-center"
-              style={{ background: `linear-gradient(135deg, #E8457A22, ${color}08)` }}
-            >
-              {pkg.emailImageUrl ? (
-                <span className="text-[9px] font-mono text-primary-500">HERO IMAGE ✓</span>
-              ) : (
-                <span className="text-[9px] font-mono text-error">⚠ IMAGE MISSING</span>
-              )}
-            </div>
-
-            {/* Body */}
-            <div className="p-3.5">
-              {repromptLoading === 'email' ? (
-                <div className="flex flex-col gap-2 mb-3">
-                  <ShimmerBlock height="14px" />
-                  <ShimmerBlock height="14px" />
-                  <ShimmerBlock height="14px" />
-                </div>
-              ) : editing ? (
-                <textarea
-                  defaultValue={editValues.emailBody ?? pkg.emailBody}
-                  onChange={e => setEditValues(prev => ({ ...prev, emailBody: e.target.value }))}
-                  className="w-full text-xs border border-dashed border-neutral-400 rounded p-1.5 bg-neutral-50 resize-y min-h-[40px] leading-relaxed"
-                />
-              ) : (
-                <p className="text-xs leading-relaxed text-neutral-700 mb-3">{pkg.emailBody}</p>
-              )}
-              <div className="text-center mb-3">
-                <div className="inline-block px-5 py-2 rounded-[7px] bg-primary-500 text-white text-xs font-semibold">
-                  {pkg.ctaText} →
-                </div>
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] text-neutral-600 font-mono tracking-wide uppercase">Email Preview</div>
+            {!editing && (
+              <div className="flex bg-neutral-800 rounded-[6px] border border-neutral-700 overflow-hidden">
+                <button
+                  onClick={() => setEmailPanelMode('preview')}
+                  className={`px-2.5 py-[3px] text-[10px] border-none cursor-pointer transition-colors ${
+                    emailPanelMode === 'preview'
+                      ? 'bg-neutral-700 text-neutral-100'
+                      : 'bg-transparent text-neutral-500 hover:text-neutral-300'
+                  }`}
+                >
+                  Preview
+                </button>
+                <button
+                  onClick={() => setEmailPanelMode('edit')}
+                  className={`px-2.5 py-[3px] text-[10px] border-none cursor-pointer transition-colors ${
+                    emailPanelMode === 'edit'
+                      ? 'bg-neutral-700 text-neutral-100'
+                      : 'bg-transparent text-neutral-500 hover:text-neutral-300'
+                  }`}
+                >
+                  Edit
+                </button>
               </div>
-              <div className="border-t border-neutral-100 pt-2.5 text-center">
-                <div className="text-[13px] font-bold text-primary-500">Try Folly for $1</div>
-                <div className="text-[10px] text-neutral-400">TRYFOLLY1</div>
-              </div>
-            </div>
+            )}
           </div>
+
+          {/* Iframe HTML preview */}
+          {!editing && emailPanelMode === 'preview' ? (
+            <div className="rounded-[10px] overflow-hidden border border-neutral-700 bg-white" style={{ height: 520 }}>
+              <iframe
+                srcDoc={emailPreviewHtml}
+                sandbox="allow-same-origin"
+                title="Email HTML Preview"
+                className="w-full h-full border-none"
+                style={{ background: '#ffffff', display: 'block' }}
+              />
+            </div>
+          ) : (
+            /* Editable fields mode (shown when editing=true OR emailPanelMode='edit') */
+            <div className="bg-white rounded-[10px] text-neutral-950 overflow-hidden">
+              {/* Subject + preview */}
+              <div className="p-3.5 bg-neutral-50 border-b border-neutral-100">
+                {repromptLoading === 'email' ? (
+                  <div className="flex flex-col gap-1.5">
+                    <ShimmerBlock height="16px" />
+                    <ShimmerBlock height="12px" />
+                  </div>
+                ) : editing ? (
+                  <>
+                    <input
+                      defaultValue={editValues.subjectLine ?? pkg.subjectLine}
+                      onChange={e => setEditValues(prev => ({ ...prev, subjectLine: e.target.value }))}
+                      className="w-full text-xs font-semibold border border-dashed border-neutral-400 rounded p-1 bg-white"
+                    />
+                    <div className="text-[10px] text-neutral-400 text-right mt-0.5">
+                      {(editValues.subjectLine ?? pkg.subjectLine).length}/50
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-xs font-semibold">{pkg.subjectLine}</div>
+                    <div className="text-[10px] text-neutral-400 mt-0.5">{pkg.previewText}</div>
+                  </>
+                )}
+              </div>
+
+              {/* Hero image */}
+              <div
+                className="w-full h-[80px] flex items-center justify-center"
+                style={{ background: `linear-gradient(135deg, #E8457A22, ${color}08)` }}
+              >
+                {pkg.emailImageUrl ? (
+                  <span className="text-[9px] font-mono text-primary-500">HERO IMAGE ✓</span>
+                ) : (
+                  <span className="text-[9px] font-mono text-error">⚠ IMAGE MISSING</span>
+                )}
+              </div>
+
+              {/* Body */}
+              <div className="p-3.5">
+                {repromptLoading === 'email' ? (
+                  <div className="flex flex-col gap-2 mb-3">
+                    <ShimmerBlock height="14px" />
+                    <ShimmerBlock height="14px" />
+                    <ShimmerBlock height="14px" />
+                  </div>
+                ) : editing ? (
+                  <textarea
+                    defaultValue={editValues.emailBody ?? pkg.emailBody}
+                    onChange={e => setEditValues(prev => ({ ...prev, emailBody: e.target.value }))}
+                    className="w-full text-xs border border-dashed border-neutral-400 rounded p-1.5 bg-neutral-50 resize-y min-h-[40px] leading-relaxed"
+                  />
+                ) : (
+                  <p className="text-xs leading-relaxed text-neutral-700 mb-3">{pkg.emailBody}</p>
+                )}
+                <div className="text-center mb-3">
+                  <div className="inline-block px-5 py-2 rounded-[7px] bg-primary-500 text-white text-xs font-semibold">
+                    {pkg.ctaText} →
+                  </div>
+                </div>
+                <div className="border-t border-neutral-100 pt-2.5 text-center">
+                  <div className="text-[13px] font-bold text-primary-500">Try Folly for $1</div>
+                  <div className="text-[10px] text-neutral-400">TRYFOLLY1</div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -489,6 +553,31 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
           </>
         )}
       </div>
+
+      {/* Batch approve */}
+      {!editing && !reprompting && pending >= 3 && (
+        <div className="flex justify-center mt-2.5">
+          <button
+            onClick={() => {
+              if (batchConfirm) {
+                // Second click — approve all pending/needs_edit
+                for (const p of packages) {
+                  if (p.status === 'pending' || p.status === 'needs_edit') {
+                    actions.updatePackage(segmentId, p.id, { status: 'approved' });
+                  }
+                }
+                setBatchConfirm(false);
+              } else {
+                setBatchConfirm(true);
+              }
+            }}
+            onBlur={() => setBatchConfirm(false)}
+            className="px-5 py-2 rounded-lg border border-neutral-700 bg-transparent text-neutral-400 text-[12px] cursor-pointer hover:text-neutral-200 hover:border-neutral-500 transition-colors"
+          >
+            {batchConfirm ? `Click again to confirm` : `Approve all ${pending} remaining`}
+          </button>
+        </div>
+      )}
 
       {/* Reprompt panel */}
       {reprompting && (

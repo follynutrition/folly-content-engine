@@ -4,15 +4,16 @@ import { PhaseStepper } from '@/components/PhaseStepper';
 import { RunHome } from '@/views/RunHome';
 import { ResearchAndTopics } from '@/views/ResearchAndTopics';
 import { ContentGeneration } from '@/views/ContentGeneration';
-import { ImageGeneration } from '@/views/ImageGeneration';
 import { Review } from '@/views/Review';
 import { Publish } from '@/views/Publish';
+import { CommandPalette } from '@/components/CommandPalette';
 import { StateContext, ActionsContext, loadState, saveState } from '@/lib/store';
 import type { AppState, ContentPackage, TopicBrief, ScheduleEntry, PublishReceipt } from '@/lib/types';
 
 export default function App() {
   const [state, setState] = useState<AppState>(loadState);
   const [activeSegment, setActiveSegment] = useState<string | null>(null);
+  const [cmdPaletteOpen, setCmdPaletteOpen] = useState(false);
   const stateRef = useRef(state);
   stateRef.current = state;
 
@@ -92,23 +93,40 @@ export default function App() {
   const advancePhase = useCallback(() => {
     if (activeSegment) {
       const current = stateRef.current.runs[stateRef.current.activeRunId]?.segments[activeSegment]?.phase ?? 0;
-      actions.setSegmentPhase(activeSegment, Math.min(current + 1, 5));
+      actions.setSegmentPhase(activeSegment, Math.min(current + 1, 4));
     }
   }, [activeSegment, actions]);
 
   const goHome = useCallback(() => setActiveSegment(null), []);
 
+  // Cmd+K command palette
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setCmdPaletteOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
+
   return (
     <ActionsContext.Provider value={actions}>
     <StateContext.Provider value={state}>
       <div className="w-full min-h-screen bg-neutral-950 text-neutral-50 font-sans">
+        <CommandPalette
+          isOpen={cmdPaletteOpen}
+          onClose={() => setCmdPaletteOpen(false)}
+          onNavigate={setActiveSegment}
+        />
         <TopBar
           activeSegment={activeSegment}
           onSegmentSelect={setActiveSegment}
           onHome={goHome}
         />
 
-        {activeSegment && currentPhase < 5 && (
+        {activeSegment && currentPhase < 4 && (
           <PhaseStepper
             segmentId={activeSegment}
             currentPhase={currentPhase}
@@ -128,16 +146,13 @@ export default function App() {
             <ContentGeneration segmentId={activeSegment} onComplete={advancePhase} />
           )}
           {activeSegment && currentPhase === 2 && (
-            <ImageGeneration segmentId={activeSegment} onComplete={advancePhase} />
-          )}
-          {activeSegment && currentPhase === 3 && (
             <Review segmentId={activeSegment} onComplete={advancePhase} />
           )}
-          {activeSegment && currentPhase === 4 && (
+          {activeSegment && currentPhase === 3 && (
             <Publish segmentId={activeSegment} onComplete={advancePhase} />
           )}
 
-          {activeSegment && currentPhase >= 5 && (
+          {activeSegment && currentPhase >= 4 && (
             <div className="text-center py-20">
               <div className="w-[52px] h-[52px] rounded-full bg-success flex items-center justify-center mx-auto mb-4 text-xl text-white">
                 ✓

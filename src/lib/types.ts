@@ -62,6 +62,7 @@ export interface ContentPackage {
   // Status
   status: PackageStatus;
   complianceFlags: ComplianceFlag[];
+  generatedBy?: 'claude' | 'mock';
 }
 
 export type ImageQAStatus = 'pending' | 'generating' | 'ready' | 'accepted' | 'rejected' | 'regenerating' | 'swapped';
@@ -72,20 +73,20 @@ export interface ComplianceFlag {
   field: string;
   message: string;
   match?: string;
+  suggestion?: string;
 }
 
-export type PhaseId = 'research' | 'content' | 'images' | 'review' | 'publish';
+export type PhaseId = 'research' | 'content' | 'review' | 'publish';
 
 export const PHASES: { id: PhaseId; label: string; index: number }[] = [
   { id: 'research', label: 'Research & Topics', index: 0 },
-  { id: 'content', label: 'Content', index: 1 },
-  { id: 'images', label: 'Images', index: 2 },
-  { id: 'review', label: 'Review', index: 3 },
-  { id: 'publish', label: 'Publish', index: 4 },
+  { id: 'content', label: 'Content & Images', index: 1 },
+  { id: 'review', label: 'Review', index: 2 },
+  { id: 'publish', label: 'Publish', index: 3 },
 ];
 
 export interface SegmentState {
-  phase: number; // 0-5 (5 = complete)
+  phase: number; // 0-4 (4 = complete)
   topics: TopicBrief[];
   packages: ContentPackage[];
   schedule: ScheduleEntry[];
