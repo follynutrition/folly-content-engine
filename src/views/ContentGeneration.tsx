@@ -5,7 +5,7 @@ import { generatePackage, generateMockPackage } from '@/lib/claude-api';
 import type { PubMedSource } from '@/lib/claude-api';
 import { generateImage } from '@/lib/gemini-api';
 import { scanPackage, hasHardFlags } from '@/lib/compliance-scanner';
-import { CaretDown, CaretUp, Check, SpinnerGap, Image as ImageIcon, X } from '@phosphor-icons/react';
+import { ArrowsClockwise, CaretDown, CaretUp, Check, SpinnerGap, Image as ImageIcon, X } from '@phosphor-icons/react';
 import type { ContentPackage } from '@/lib/types';
 
 interface ContentGenerationProps {
@@ -16,6 +16,8 @@ interface ContentGenerationProps {
 interface PackageWithProgress extends ContentPackage {
   blogImageGenerating?: boolean;
   emailImageGenerating?: boolean;
+  regenerating?: boolean;
+  regenCount?: number;
 }
 
 export function ContentGeneration({ segmentId, onComplete }: ContentGenerationProps) {
@@ -35,6 +37,7 @@ export function ContentGeneration({ segmentId, onComplete }: ContentGenerationPr
   const [generating, setGenerating] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [expandedPkg, setExpandedPkg] = useState<string | null>(null);
+  const [regeneratingId, setRegeneratingId] = useState<string | null>(null);
   const generatedRef = useRef(false);
   const topicsRef = useRef(topics);
   topicsRef.current = topics;
@@ -71,10 +74,65 @@ export function ContentGeneration({ segmentId, onComplete }: ContentGenerationPr
         p.id === pkgId ? { ...p, [field]: url, [statusField]: 'ready', [genField]: false } : p
       ));
     } catch {
-      // Image generation failed — leave as pending, user can retry in Image QA
+      // Image generation failed — leave as pending, user can retry via Regen button
       setPackages(prev => prev.map(p =>
         p.id === pkgId ? { ...p, [statusField]: 'pending', [genField]: false } : p
       ));
+    }
+  }
+
+  // Regenerate a single package
+  async function handleRegenerate(pkgId: string) {
+    const pkg = packages.find(p => p.id === pkgId);
+    if (!pkg) return;
+    const topic = topics.find(t => t.id === pkg.topicId);
+    if (!topic) return;
+
+    setRegeneratingId(pkgId);
+    setPackages(prev => prev.map(p =>
+      p.id === pkgId ? { ...p, regenerating: true } : p
+    ));
+
+    try {
+      const sources = await fetchSources(topic);
+      let newPkg: ContentPackage;
+      try {
+        newPkg = await generatePackage(topic, sources);
+        newPkg.generatedBy = 'claude';
+      } catch {
+        newPkg = generateMockPackage(topic);
+        newPkg.generatedBy = 'mock';
+      }
+
+      // Run compliance scan
+      const flags = scanPackage(newPkg);
+      newPkg.complianceFlags = flags;
+      if (hasHardFlags(flags)) {
+        newPkg.status = 'needs_edit';
+      }
+
+      // Replace the package, keeping the same id and incrementing regenCount
+      setPackages(prev => prev.map(p =>
+        p.id === pkgId
+          ? {
+              ...newPkg,
+              id: pkgId,
+              regenerating: false,
+              regenCount: (p.regenCount ?? 0) + 1,
+            }
+          : p
+      ));
+
+      // Start image generation for the new package
+      generateImageForPackage(pkgId, newPkg, 'blog');
+      generateImageForPackage(pkgId, newPkg, 'email');
+    } catch {
+      // On failure, clear the regenerating state
+      setPackages(prev => prev.map(p =>
+        p.id === pkgId ? { ...p, regenerating: false } : p
+      ));
+    } finally {
+      setRegeneratingId(null);
     }
   }
 
@@ -143,6 +201,14 @@ export function ContentGeneration({ segmentId, onComplete }: ContentGenerationPr
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generating]);
 
+  // Save packages after a regeneration completes
+  useEffect(() => {
+    if (!generating && regeneratingId === null && packagesRef.current.length > 0) {
+      actions.setPackages(segmentId, packagesRef.current);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [regeneratingId]);
+
   const color = seg?.color ?? '#E8457A';
   const flaggedCount = packages.filter(p => p.complianceFlags.length > 0).length;
   const imagesReady = packages.filter(p => p.blogImageUrl && p.emailImageUrl).length;
@@ -168,7 +234,31 @@ export function ContentGeneration({ segmentId, onComplete }: ContentGenerationPr
         {packages.map(pkg => {
           const isExpanded = expandedPkg === pkg.id;
           return (
-            <div key={pkg.id} className="animate-in bg-neutral-800 rounded-[10px] border border-neutral-700">
+            <div key={pkg.id} className="animate-in bg-neutral-800 rounded-[10px] border border-neutral-700 relative">
+              {/* Regen button — top right corner */}
+              {!pkg.regenerating && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleRegenerate(pkg.id); }}
+                  disabled={generating || regeneratingId !== null}
+                  className="absolute top-2.5 right-2.5 z-10 flex items-center gap-1 bg-transparent border-none cursor-pointer text-neutral-500 hover:text-neutral-300 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  style={{ fontSize: '12px' }}
+                  title="Regenerate this package"
+                >
+                  <ArrowsClockwise size={12} />
+                  Regen
+                  {(pkg.regenCount ?? 0) > 0 && (
+                    <span className="text-[10px] font-mono text-neutral-600 ml-0.5">&times;{pkg.regenCount}</span>
+                  )}
+                </button>
+              )}
+
+              {/* Shimmer overlay when regenerating */}
+              {pkg.regenerating && (
+                <div className="absolute inset-0 z-10 rounded-[10px] overflow-hidden">
+                  <div className="w-full h-full skeleton" />
+                </div>
+              )}
+
               {/* Compliance flags */}
               {pkg.complianceFlags.length > 0 && (
                 <div className="flex gap-1.5 px-3.5 pt-3 flex-wrap">
