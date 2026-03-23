@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { MagnifyingGlass, UploadSimple, TextT, ArrowUpRight, TrendUp } from '@phosphor-icons/react';
+import { MagnifyingGlass, UploadSimple, TextT, ArrowUpRight, TrendUp, Plus } from '@phosphor-icons/react';
 import { getSegment } from '@/lib/config';
 import { useStoreState, useActions } from '@/lib/store';
 import { getMockResearchResults } from '@/lib/search-mock';
@@ -37,6 +37,12 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
     [segment]
   );
 
+  // ── Google Autocomplete state ──
+  const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
+  const [autocompleteLoading, setAutocompleteLoading] = useState(false);
+  const [autocompleteError, setAutocompleteError] = useState<string | null>(null);
+  const addedSuggestionsRef = useRef(new Set<string>());
+
   // Stream research results
   useEffect(() => {
     if (researchState !== 'running') return;
@@ -51,6 +57,53 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
     }, 350);
     return () => clearTimeout(timer);
   }, [researchState, visibleResults.length, allResults, sources]);
+
+  // Fetch Google autocomplete when Reddit research finishes
+  useEffect(() => {
+    if (researchState !== 'done') return;
+    if (autocompleteSuggestions.length > 0 || autocompleteLoading) return;
+
+    const seedQueries = segment?.google_seed_queries ?? [];
+    if (seedQueries.length === 0) return;
+
+    setAutocompleteLoading(true);
+    setAutocompleteError(null);
+
+    fetch('/api/autocomplete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ queries: seedQueries }),
+    })
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`API returned ${res.status}`);
+        const data = await res.json();
+        setAutocompleteSuggestions(data.suggestions ?? []);
+      })
+      .catch((err) => {
+        console.error('Autocomplete fetch failed:', err);
+        setAutocompleteError(err instanceof Error ? err.message : 'Failed to fetch suggestions');
+      })
+      .finally(() => setAutocompleteLoading(false));
+  }, [researchState, segment, autocompleteSuggestions.length, autocompleteLoading]);
+
+  // Add a single autocomplete suggestion as a topic
+  const addSuggestionAsTopic = useCallback((suggestion: string) => {
+    if (addedSuggestionsRef.current.has(suggestion)) return;
+    addedSuggestionsRef.current.add(suggestion);
+
+    const topic: TopicBrief = {
+      id: generateId(),
+      headline: suggestion.length > 80 ? suggestion.substring(0, 77) + '...' : suggestion,
+      source_question: suggestion,
+      emotion: 'seeking' as EmotionTag,
+      folly_hook: 'Folly\'s microsphere delivery system protects key nutrients through compromised digestion',
+      suggested_subject_line: suggestion.substring(0, 45),
+      segment: segmentId,
+      freshness: 'evergreen' as const,
+      selected: true,
+    };
+    setTopics(prev => [...prev, topic]);
+  }, [segmentId]);
 
   // ── Import state ──
   const [pasteText, setPasteText] = useState('');
@@ -249,6 +302,59 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
                   >
                     Convert to Topics →
                   </button>
+                </div>
+              )}
+
+              {/* ── Google Autocomplete Results ── */}
+              {researchState === 'done' && (
+                <div className="mt-8">
+                  <div className="flex items-center gap-2 mb-3">
+                    <MagnifyingGlass size={14} style={{ color }} />
+                    <span className="text-xs font-mono tracking-wide uppercase text-neutral-500">Google Searches</span>
+                    {autocompleteLoading && (
+                      <span className="pulse-dot inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ backgroundColor: color }} />
+                    )}
+                  </div>
+
+                  {autocompleteLoading && (
+                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] bg-neutral-800 border border-neutral-700">
+                      <span className="pulse-dot inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                      <span className="text-sm text-neutral-300">Fetching Google autocomplete suggestions...</span>
+                    </div>
+                  )}
+
+                  {autocompleteError && (
+                    <div className="px-3 py-2.5 rounded-[10px] bg-neutral-800 border border-neutral-700 text-sm text-neutral-400">
+                      Could not load autocomplete suggestions.
+                    </div>
+                  )}
+
+                  {autocompleteSuggestions.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      {autocompleteSuggestions.map((suggestion, i) => {
+                        const isAdded = addedSuggestionsRef.current.has(suggestion);
+                        return (
+                          <div key={i} className="animate-in bg-neutral-800 rounded-[10px] border border-neutral-700 p-3 px-3.5 flex items-center gap-3">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-[13.5px] text-neutral-50 leading-relaxed">{suggestion}</p>
+                              <div className="flex gap-1.5 mt-1.5">
+                                <span className="text-[10px] font-mono px-[7px] py-[1px] rounded-full bg-neutral-700/50 text-neutral-400">Google</span>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => addSuggestionAsTopic(suggestion)}
+                              disabled={isAdded}
+                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-none text-xs font-semibold cursor-pointer hover:brightness-110 transition-[filter] disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
+                              style={{ backgroundColor: isAdded ? 'var(--color-neutral-700)' : `${color}20`, color: isAdded ? 'var(--color-neutral-500)' : color }}
+                            >
+                              <Plus size={12} weight="bold" />
+                              {isAdded ? 'Added' : 'Add'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

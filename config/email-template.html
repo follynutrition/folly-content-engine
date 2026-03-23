@@ -1,100 +1,94 @@
 <!--
   FOLLY CONTENT ENGINE — Klaviyo Campaign Email Template
-  Version: 1.0
-  
-  This is the HTML skeleton used for every campaign email. The Content Engine
-  injects dynamic content into the marked slots before pushing to Klaviyo via MCP.
-  
+  Version: 2.0 — Matches Folly's actual email design
+
   SLOTS (replaced programmatically):
+    {{HEADLINE}}           — Blog headline (displayed as email title)
     {{HERO_IMAGE_URL}}     — Email hero image URL (600x400, hosted on CDN)
     {{HERO_IMAGE_ALT}}     — Alt text for hero image
     {{BODY_TEXT}}           — 2-3 teaser sentences (max 50 words)
-    {{CTA_TEXT}}            — Button label ("Read what I found", "See the details", etc)
+    {{CTA_TEXT}}            — Button label ("SEE WHAT'S ACTUALLY HAPPENING", etc)
     {{CTA_URL}}             — Blog post URL on Shopify
-    {{SEGMENT_COLOR}}       — Segment accent color for subtle top border
-    
-  STATIC ELEMENTS (do not change per email):
-    - Folly logo header
-    - $1 offer footer (TRYFOLLY1)
-    - Unsubscribe + address footer
-    - Font stack: system fonts (no web font loading in email)
+    {{PREVIEW_TEXT}}        — Email preview text (shown in inbox)
+    {{SEGMENT_COLOR}}       — Segment accent color (unused in v2 but kept for compatibility)
 -->
 <!DOCTYPE html>
-<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
+<html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
   <title>Folly Nutrition</title>
   <style>
-    /* Reset */
     body, table, td, a { -webkit-text-size-adjust: 100%; -ms-text-size-adjust: 100%; }
     table, td { mso-table-lspace: 0pt; mso-table-rspace: 0pt; }
     img { -ms-interpolation-mode: bicubic; border: 0; height: auto; line-height: 100%; outline: none; text-decoration: none; }
-    body { margin: 0; padding: 0; width: 100% !important; height: 100% !important; background-color: #f4f2ef; }
-
-    /* Fonts — system stack, no loading */
-    .body-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
-    
-    /* Mobile */
+    body { margin: 0; padding: 0; width: 100% !important; background-color: #ffffff; }
+    .body-text { font-family: Georgia, 'Times New Roman', serif; }
+    .ui-text { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; }
     @media only screen and (max-width: 600px) {
       .email-container { width: 100% !important; }
       .fluid { max-width: 100% !important; height: auto !important; }
-      .stack-column { display: block !important; width: 100% !important; }
       .mobile-padding { padding-left: 20px !important; padding-right: 20px !important; }
     }
   </style>
 </head>
-<body style="margin: 0; padding: 0; background-color: #f4f2ef;">
-  <!-- Preheader (invisible, shows in email client preview) -->
+<body style="margin: 0; padding: 0; background-color: #ffffff;">
+  <!-- Preheader -->
   <div style="display: none; max-height: 0; overflow: hidden;">
     {{PREVIEW_TEXT}}
-    <!-- Padding to push any trailing HTML out of preview -->
-    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
+    &nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;
   </div>
 
-  <!-- Email wrapper -->
-  <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="600" class="email-container" style="margin: auto;">
-    
-    <!-- Segment color accent bar -->
-    <tr>
-      <td style="height: 3px; background-color: {{SEGMENT_COLOR}};"></td>
-    </tr>
+  <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center" width="600" class="email-container" style="margin: auto; background-color: #ffffff;">
 
-    <!-- HEADER: Logo -->
+    <!-- LOGO -->
     <tr>
-      <td style="background-color: #ffffff; padding: 24px 32px 16px 32px; text-align: left;">
-        <!-- Folly logo — small, left-aligned -->
-        <img src="https://follynutrition.com/logo-email.png" alt="Folly Nutrition" width="90" style="display: block;">
+      <td style="padding: 32px 0 24px 0; text-align: center;">
+        <img src="https://follynutrition.com/logo-email.png" alt="FOLLY" width="120" style="display: inline-block; color: #C41162; font-size: 28px; font-weight: 700; letter-spacing: 4px;">
       </td>
     </tr>
 
     <!-- HERO IMAGE -->
     <tr>
-      <td style="background-color: #ffffff;">
+      <td style="padding: 0;">
         <a href="{{CTA_URL}}" target="_blank" style="text-decoration: none;">
-          <img src="{{HERO_IMAGE_URL}}" alt="{{HERO_IMAGE_ALT}}" width="600" style="display: block; width: 100%; max-width: 600px; height: auto;" class="fluid">
+          <img src="{{HERO_IMAGE_URL}}" alt="{{HERO_IMAGE_ALT}}" width="600" style="display: block; width: 100%; max-width: 600px; height: auto; border-radius: 0;" class="fluid">
         </a>
+      </td>
+    </tr>
+
+    <!-- HEADLINE -->
+    <tr>
+      <td style="padding: 32px 32px 16px 32px;" class="mobile-padding">
+        <h1 class="body-text" style="margin: 0; font-size: 26px; line-height: 1.3; color: #C41162; font-weight: 700;">
+          {{HEADLINE}}
+        </h1>
       </td>
     </tr>
 
     <!-- BODY TEXT -->
     <tr>
-      <td style="background-color: #ffffff; padding: 28px 32px 8px 32px;" class="mobile-padding">
-        <p class="body-text" style="margin: 0; font-size: 16px; line-height: 1.6; color: #2A2723;">
+      <td style="padding: 0 32px 28px 32px;" class="mobile-padding">
+        <p class="body-text" style="margin: 0; font-size: 16px; line-height: 1.65; color: #333333;">
           {{BODY_TEXT}}
         </p>
       </td>
     </tr>
 
-    <!-- CTA BUTTON -->
+    <!-- CTA BUTTON — gradient pink pill -->
     <tr>
-      <td style="background-color: #ffffff; padding: 20px 32px 32px 32px; text-align: center;" class="mobile-padding">
+      <td style="padding: 0 32px 40px 32px; text-align: center;" class="mobile-padding">
         <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
           <tr>
-            <td style="border-radius: 8px; background-color: #E8457A;">
-              <a href="{{CTA_URL}}" target="_blank" class="body-text" style="display: inline-block; padding: 14px 32px; font-size: 16px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 8px;">
-                {{CTA_TEXT}} →
+            <td style="border-radius: 50px; background: linear-gradient(135deg, #E8457A 0%, #C41162 100%);">
+              <!--[if mso]>
+              <v:roundrect xmlns:v="urn:schemas-microsoft-com:vml" style="height:52px;v-text-anchor:middle;width:340px;" arcsize="50%" fillcolor="#C41162">
+              <center style="color:#ffffff;font-family:sans-serif;font-size:15px;font-weight:700;letter-spacing:1.5px;">{{CTA_TEXT}} &#8599;</center>
+              </v:roundrect>
+              <![endif]-->
+              <a href="{{CTA_URL}}" target="_blank" class="ui-text" style="display: inline-block; padding: 16px 40px; font-size: 14px; font-weight: 700; color: #ffffff; text-decoration: none; border-radius: 50px; letter-spacing: 1.5px; text-transform: uppercase;">
+                {{CTA_TEXT}} &#8599;
               </a>
             </td>
           </tr>
@@ -104,25 +98,27 @@
 
     <!-- DIVIDER -->
     <tr>
-      <td style="background-color: #ffffff; padding: 0 32px;" class="mobile-padding">
-        <hr style="border: none; border-top: 1px solid #EBE8E4; margin: 0;">
+      <td style="padding: 0 32px;" class="mobile-padding">
+        <hr style="border: none; border-top: 1px solid #f0f0f0; margin: 0;">
       </td>
     </tr>
 
-    <!-- $1 OFFER FOOTER -->
+    <!-- $1 TRIAL FOOTER -->
     <tr>
-      <td style="background-color: #ffffff; padding: 24px 32px; text-align: center;" class="mobile-padding">
-        <p class="body-text" style="margin: 0 0 4px 0; font-size: 20px; font-weight: 700; color: #E8457A;">
-          Try Folly for $1
-        </p>
-        <p class="body-text" style="margin: 0 0 16px 0; font-size: 14px; color: #9A948C;">
-          Your first month, on us. Code: <strong style="color: #2A2723;">TRYFOLLY1</strong>
-        </p>
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" align="center">
+      <td style="padding: 28px 32px;" class="mobile-padding">
+        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background: linear-gradient(135deg, #FFF0F6 0%, #FFE8F0 100%); border-radius: 16px; overflow: hidden;">
           <tr>
-            <td style="border-radius: 8px; border: 2px solid #E8457A;">
-              <a href="https://follynutrition.com?code=TRYFOLLY1" target="_blank" class="body-text" style="display: inline-block; padding: 10px 24px; font-size: 14px; font-weight: 600; color: #E8457A; text-decoration: none; border-radius: 6px;">
-                Claim Your $1 Month
+            <td style="padding: 20px 24px;" valign="middle" width="55%">
+              <p class="ui-text" style="margin: 0 0 2px 0; font-size: 18px; font-weight: 700; color: #C41162;">
+                Start your $1 trial
+              </p>
+              <p class="ui-text" style="margin: 0; font-size: 12px; color: #999999;">
+                Clinically formulated for women
+              </p>
+            </td>
+            <td style="padding: 20px 24px; text-align: right;" valign="middle" width="45%">
+              <a href="https://follynutrition.com?code=TRYFOLLY1" target="_blank" class="ui-text" style="display: inline-block; padding: 10px 24px; font-size: 13px; font-weight: 600; color: #ffffff; text-decoration: none; border-radius: 50px; background: linear-gradient(135deg, #E8457A 0%, #C41162 100%);">
+                Try Folly
               </a>
             </td>
           </tr>
@@ -132,22 +128,19 @@
 
     <!-- FOOTER -->
     <tr>
-      <td style="background-color: #f4f2ef; padding: 24px 32px; text-align: center;" class="mobile-padding">
-        <!-- Social links -->
-        <p class="body-text" style="margin: 0 0 12px 0; font-size: 12px; color: #9A948C;">
-          <a href="https://instagram.com/follynutrition" target="_blank" style="color: #9A948C; text-decoration: none;">Instagram</a>
+      <td style="padding: 24px 32px; text-align: center;" class="mobile-padding">
+        <p class="ui-text" style="margin: 0 0 8px 0; font-size: 12px; color: #999999;">
+          <a href="https://instagram.com/follynutrition" target="_blank" style="color: #999999; text-decoration: none;">Instagram</a>
           &nbsp;&nbsp;·&nbsp;&nbsp;
-          <a href="https://tiktok.com/@follynutrition" target="_blank" style="color: #9A948C; text-decoration: none;">TikTok</a>
+          <a href="https://tiktok.com/@follynutrition" target="_blank" style="color: #999999; text-decoration: none;">TikTok</a>
         </p>
-        
-        <!-- Legal -->
-        <p class="body-text" style="margin: 0 0 8px 0; font-size: 11px; color: #B8B3AC; line-height: 1.5;">
+        <p class="ui-text" style="margin: 0 0 8px 0; font-size: 11px; color: #cccccc;">
           Folly Nutrition · Los Angeles, CA
         </p>
-        <p class="body-text" style="margin: 0; font-size: 11px; color: #B8B3AC;">
-          <a href="{{ unsubscribe_url }}" style="color: #B8B3AC; text-decoration: underline;">Unsubscribe</a>
+        <p class="ui-text" style="margin: 0; font-size: 11px; color: #cccccc;">
+          <a href="{{ unsubscribe_url }}" style="color: #cccccc; text-decoration: underline;">Unsubscribe</a>
           &nbsp;&nbsp;·&nbsp;&nbsp;
-          <a href="{{ manage_preferences_url }}" style="color: #B8B3AC; text-decoration: underline;">Manage Preferences</a>
+          <a href="{{ manage_preferences_url }}" style="color: #cccccc; text-decoration: underline;">Manage Preferences</a>
         </p>
       </td>
     </tr>

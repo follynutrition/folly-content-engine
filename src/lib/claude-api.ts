@@ -147,6 +147,62 @@ export async function generatePackage(topic: TopicBrief, sources?: PubMedSource[
   };
 }
 
+export async function repromptBlog(pkg: ContentPackage, instruction: string): Promise<BlogResult> {
+  const userPrompt = fillTemplate(blogPrompt.user_prompt_template, {
+    headline: pkg.headline,
+    segment: pkg.segment,
+    source_question: pkg.sourceQuestion,
+    emotion: pkg.emotion,
+    folly_hook: pkg.follyHook,
+    sources_section: '',
+  }) + `\n\nREPROMPT INSTRUCTION: ${instruction}\n\nRewrite the blog following this instruction while keeping the same topic and compliance rules.`;
+
+  try {
+    const content = await callClaude(
+      blogPrompt.system_prompt,
+      userPrompt,
+      blogPrompt.model,
+      blogPrompt.max_tokens,
+      blogPrompt.temperature,
+    );
+
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Failed to parse blog response');
+    return JSON.parse(jsonMatch[0]);
+  } catch (err) {
+    console.error('repromptBlog failed:', err);
+    throw err;
+  }
+}
+
+export async function repromptEmail(pkg: ContentPackage, blogBody: string, instruction: string): Promise<EmailResult> {
+  const userPrompt = fillTemplate(emailPrompt.user_prompt_template, {
+    headline: pkg.headline,
+    segment: pkg.segment,
+    source_question: pkg.sourceQuestion,
+    emotion: pkg.emotion,
+    blog_url: '#',
+    blog_body: blogBody,
+  }) + `\n\nREPROMPT INSTRUCTION: ${instruction}\n\nRewrite the email following this instruction while keeping the same topic and compliance rules.`;
+
+  try {
+    const content = await callClaude(
+      emailPrompt.system_prompt,
+      userPrompt,
+      emailPrompt.model,
+      emailPrompt.max_tokens,
+      emailPrompt.temperature,
+    );
+
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) throw new Error('Failed to parse email response');
+    return JSON.parse(jsonMatch[0]);
+  } catch (err) {
+    console.error('repromptEmail failed:', err);
+    throw err;
+  }
+}
+
 // Mock content generation for when Claude API isn't available
 export function generateMockPackage(topic: TopicBrief): ContentPackage {
   const excerpts: Record<string, string> = {

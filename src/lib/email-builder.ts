@@ -13,10 +13,11 @@ export function buildEmailHtml(
   let html = emailTemplate;
 
   const replacements: Record<string, string> = {
-    '{{HERO_IMAGE_URL}}': pkg.emailImageUrl ?? '',
+    '{{HEADLINE}}': pkg.headline,
+    '{{HERO_IMAGE_URL}}': pkg.emailImageUrl ?? 'https://placehold.co/600x400/FFF0F6/E8457A?text=Folly',
     '{{HERO_IMAGE_ALT}}': `${pkg.headline} - Folly Nutrition`,
     '{{BODY_TEXT}}': pkg.emailBody,
-    '{{CTA_TEXT}}': pkg.ctaText,
+    '{{CTA_TEXT}}': pkg.ctaText.toUpperCase(),
     '{{CTA_URL}}': blogUrl,
     '{{SEGMENT_COLOR}}': segmentColor,
     '{{PREVIEW_TEXT}}': pkg.previewText,
