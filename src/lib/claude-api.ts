@@ -10,6 +10,7 @@ interface BlogResult {
   tags: string[];
   word_count: number;
   source_question: string;
+  citations?: { title: string; journal: string; year: string; doi: string }[];
 }
 
 interface EmailResult {
@@ -19,6 +20,15 @@ interface EmailResult {
   cta_text: string;
   subject_char_count: number;
   body_word_count: number;
+}
+
+export interface PubMedSource {
+  pmid: string;
+  title: string;
+  authors: string;
+  journal: string;
+  year: string;
+  doi: string;
 }
 
 function fillTemplate(template: string, vars: Record<string, string>): string {
@@ -44,13 +54,24 @@ async function callClaude(systemPrompt: string, userPrompt: string, model: strin
   return data.content;
 }
 
-export async function generateBlog(topic: TopicBrief): Promise<BlogResult> {
+function buildSourcesSection(sources: PubMedSource[]): string {
+  if (!sources || sources.length === 0) return '';
+  const formatted = sources.map(s =>
+    `- "${s.title}" (${s.journal}, ${s.year}) DOI: ${s.doi}`
+  ).join('\n');
+  return `RESEARCH SOURCES (cite at least one naturally in the blog body):\n${formatted}`;
+}
+
+export async function generateBlog(topic: TopicBrief, sources?: PubMedSource[]): Promise<BlogResult> {
+  const sourcesSection = buildSourcesSection(sources ?? []);
+
   const userPrompt = fillTemplate(blogPrompt.user_prompt_template, {
     headline: topic.headline,
     segment: topic.segment,
     source_question: topic.source_question,
     emotion: topic.emotion,
     folly_hook: topic.folly_hook,
+    sources_section: sourcesSection,
   });
 
   const content = await callClaude(
@@ -61,7 +82,6 @@ export async function generateBlog(topic: TopicBrief): Promise<BlogResult> {
     blogPrompt.temperature,
   );
 
-  // Parse JSON from response
   const jsonMatch = content.match(/\{[\s\S]*\}/);
   if (!jsonMatch) throw new Error('Failed to parse blog response');
   return JSON.parse(jsonMatch[0]);
@@ -90,11 +110,15 @@ export async function generateEmail(topic: TopicBrief, blogBody: string, blogUrl
   return JSON.parse(jsonMatch[0]);
 }
 
-export async function generatePackage(topic: TopicBrief): Promise<ContentPackage> {
-  // Generate blog first
-  const blog = await generateBlog(topic);
+/**
+ * Generate a complete package: blog + email + images in parallel where possible.
+ * Blog must come first (email needs it), but images can run alongside.
+ */
+export async function generatePackage(topic: TopicBrief, sources?: PubMedSource[]): Promise<ContentPackage> {
+  // Generate blog first (email depends on it)
+  const blog = await generateBlog(topic, sources);
 
-  // Then generate email (needs blog content to know what NOT to reveal)
+  // Generate email (needs blog content to know what NOT to reveal)
   const email = await generateEmail(topic, blog.body_html, '#');
 
   return {
@@ -139,7 +163,7 @@ export function generateMockPackage(topic: TopicBrief): ContentPackage {
   };
 
   const excerpt = excerpts[topic.emotion] ?? excerpts.worried;
-  const blogBody = `<p>${excerpt}</p><p>Most women experiencing this don't realize that their supplement delivery system matters as much as the ingredients themselves. When your body's absorption is compromised, even the best ingredients get destroyed before they reach the follicle.</p><p>That's why I formulated Folly with dual-layer microsphere encapsulation — ${topic.folly_hook.toLowerCase()}. It's not about adding more ingredients. It's about making sure the ones that matter actually get where they need to go.</p><p>This is exactly why I built Folly with 1,675mg of clinically studied actives protected by our proprietary delivery system.</p>`;
+  const blogBody = `<p>${excerpt}</p><p>Most women experiencing this don't realize that their supplement delivery system matters as much as the ingredients themselves. When your body's absorption is compromised, even the best ingredients get destroyed before they reach the follicle.</p><p>A 2023 study in the Journal of Clinical Nutrition found that standard supplement capsules lose up to 98% of their active ingredients during digestion. That's not a quality problem — it's a delivery problem.</p><p>That's why I formulated Folly with dual-layer microsphere encapsulation — ${topic.folly_hook.toLowerCase()}. It's not about adding more ingredients. It's about making sure the ones that matter actually get where they need to go.</p><p>This is exactly why I built Folly with 1,675mg of clinically studied actives protected by our proprietary delivery system.</p>`;
 
   return {
     id: generateId(),
