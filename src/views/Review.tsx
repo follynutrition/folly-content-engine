@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { useStore } from '@/lib/store';
 import { getSegment } from '@/lib/config';
 import { Kbd } from '@/components/Kbd';
+import { scanPackage, hasHardFlags } from '@/lib/compliance-scanner';
+import { repromptBlog, repromptEmail } from '@/lib/claude-api';
 import type { ContentPackage, PackageStatus } from '@/lib/types';
 
 interface ReviewProps {
@@ -24,6 +26,12 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
   const [filter, setFilter] = useState<FilterType>('all');
   const [editValues, setEditValues] = useState<Partial<ContentPackage>>({});
 
+  // Reprompt state
+  const [reprompting, setReprompting] = useState(false);
+  const [repromptInstruction, setRepromptInstruction] = useState('');
+  const [repromptLoading, setRepromptLoading] = useState<'blog' | 'email' | null>(null);
+  const repromptInputRef = useRef<HTMLInputElement>(null);
+
   const color = seg?.color ?? '#E8457A';
   const pkg = packages[cur];
   const pending = packages.filter(p => p.status === 'pending' || p.status === 'needs_edit').length;
@@ -37,6 +45,8 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
   packagesRef.current = packages;
   const editValuesRef = useRef(editValues);
   editValuesRef.current = editValues;
+  const repromptingRef = useRef(reprompting);
+  repromptingRef.current = reprompting;
 
   const setStatus = useCallback((status: PackageStatus) => {
     const currentPkg = pkgRef.current;
@@ -61,9 +71,84 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
     setEditValues({});
   }, [segmentId, actions]);
 
-  // Keyboard shortcuts — deps are stable (editing is the only reactive dep)
+  // Focus the reprompt input when toggled on
+  useEffect(() => {
+    if (reprompting && repromptInputRef.current) {
+      repromptInputRef.current.focus();
+    }
+  }, [reprompting]);
+
+  const handleRepromptBlog = useCallback(async () => {
+    const currentPkg = pkgRef.current;
+    if (!currentPkg || !repromptInstruction.trim()) return;
+    setRepromptLoading('blog');
+    try {
+      const result = await repromptBlog(currentPkg, repromptInstruction.trim());
+      const updates: Partial<ContentPackage> = {
+        headline: result.headline,
+        metaTitle: result.meta_title,
+        metaDescription: result.meta_description,
+        blogBody: result.body_html,
+        blogTags: result.tags,
+        wordCount: result.word_count,
+      };
+      // Re-run compliance on the updated package
+      const updatedPkg = { ...currentPkg, ...updates };
+      const flags = scanPackage(updatedPkg);
+      updates.complianceFlags = flags;
+      if (hasHardFlags(flags)) {
+        updates.status = 'needs_edit';
+      }
+      actions.updatePackage(segmentId, currentPkg.id, updates);
+      setReprompting(false);
+      setRepromptInstruction('');
+    } catch {
+      // stay in reprompt mode so user can retry
+    } finally {
+      setRepromptLoading(null);
+    }
+  }, [repromptInstruction, segmentId, actions]);
+
+  const handleRepromptEmail = useCallback(async () => {
+    const currentPkg = pkgRef.current;
+    if (!currentPkg || !repromptInstruction.trim()) return;
+    setRepromptLoading('email');
+    try {
+      const result = await repromptEmail(currentPkg, currentPkg.blogBody, repromptInstruction.trim());
+      const updates: Partial<ContentPackage> = {
+        subjectLine: result.subject_line,
+        previewText: result.preview_text,
+        emailBody: result.body_text,
+        ctaText: result.cta_text,
+      };
+      // Re-run compliance on the updated package
+      const updatedPkg = { ...currentPkg, ...updates };
+      const flags = scanPackage(updatedPkg);
+      updates.complianceFlags = flags;
+      if (hasHardFlags(flags)) {
+        updates.status = 'needs_edit';
+      }
+      actions.updatePackage(segmentId, currentPkg.id, updates);
+      setReprompting(false);
+      setRepromptInstruction('');
+    } catch {
+      // stay in reprompt mode so user can retry
+    } finally {
+      setRepromptLoading(null);
+    }
+  }, [repromptInstruction, segmentId, actions]);
+
+  // Keyboard shortcuts — deps are stable (editing and reprompting are the reactive deps)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      // When reprompt input is focused, only handle Escape
+      if (repromptingRef.current) {
+        if (e.key === 'Escape') {
+          setReprompting(false);
+          setRepromptInstruction('');
+        }
+        return;
+      }
       if (editing) {
         if (e.key === 'Escape') { setEditing(false); setEditValues({}); }
         return;
@@ -72,6 +157,7 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
       if (e.key === 'a') setStatus('approved');
       if (e.key === 'r') setStatus('rejected');
       if (e.key === 'e') { setEditing(true); setEditValues({}); }
+      if (e.key === 'p') { setReprompting(true); setRepromptInstruction(''); }
       if (e.key === 'ArrowRight' || e.key === 'j') setCur(c => Math.min(c + 1, packagesRef.current.length - 1));
       if (e.key === 'ArrowLeft' || e.key === 'k') setCur(c => Math.max(c - 1, 0));
       if (e.key === 'l') setMode(m => m === 'flip' ? 'list' : 'flip');
@@ -163,8 +249,18 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
   // Flip-through mode
   if (!pkg) return null;
 
+  // Shimmer skeleton for loading state
+  const ShimmerBlock = ({ height }: { height: string }) => (
+    <div
+      className="rounded-[7px] overflow-hidden"
+      style={{ height, background: 'linear-gradient(90deg, #2a2a2a 25%, #333 50%, #2a2a2a 75%)', backgroundSize: '200% 100%', animation: 'shimmer 1.5s infinite' }}
+    />
+  );
+
   return (
     <div className="max-w-[880px] mx-auto">
+      <style>{`@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }`}</style>
+
       {/* Progress bar */}
       <div className="flex items-center gap-2.5 mb-3.5">
         <span className="text-[13px] text-neutral-500">Pkg {cur + 1}/{packages.length}</span>
@@ -241,27 +337,35 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
               )}
             </div>
 
-            {editing ? (
-              <textarea
-                defaultValue={editValues.headline ?? pkg.headline}
-                onChange={e => setEditValues(prev => ({ ...prev, headline: e.target.value }))}
-                className="w-full text-lg font-serif border border-dashed border-neutral-400 rounded-[6px] p-2 bg-neutral-50 resize-y min-h-[48px] leading-tight"
-              />
+            {repromptLoading === 'blog' ? (
+              <div className="flex flex-col gap-3">
+                <ShimmerBlock height="28px" />
+                <ShimmerBlock height="14px" />
+                <ShimmerBlock height="80px" />
+                <ShimmerBlock height="60px" />
+              </div>
+            ) : editing ? (
+              <>
+                <textarea
+                  defaultValue={editValues.headline ?? pkg.headline}
+                  onChange={e => setEditValues(prev => ({ ...prev, headline: e.target.value }))}
+                  className="w-full text-lg font-serif border border-dashed border-neutral-400 rounded-[6px] p-2 bg-neutral-50 resize-y min-h-[48px] leading-tight"
+                />
+                <div className="text-[11px] text-neutral-400 mb-3">By Luna Yu · {pkg.wordCount} words</div>
+                <textarea
+                  defaultValue={editValues.blogBody ?? pkg.blogBody.replace(/<[^>]*>/g, '')}
+                  onChange={e => setEditValues(prev => ({ ...prev, blogBody: `<p>${e.target.value}</p>` }))}
+                  className="w-full text-[13px] border border-dashed border-neutral-400 rounded-[6px] p-2 bg-neutral-50 resize-y min-h-[60px] leading-relaxed"
+                />
+              </>
             ) : (
-              <h2 className="text-lg font-serif leading-tight mb-2.5">{pkg.headline}</h2>
-            )}
-            <div className="text-[11px] text-neutral-400 mb-3">By Luna Yu · {pkg.wordCount} words</div>
-
-            {editing ? (
-              <textarea
-                defaultValue={editValues.blogBody ?? pkg.blogBody.replace(/<[^>]*>/g, '')}
-                onChange={e => setEditValues(prev => ({ ...prev, blogBody: `<p>${e.target.value}</p>` }))}
-                className="w-full text-[13px] border border-dashed border-neutral-400 rounded-[6px] p-2 bg-neutral-50 resize-y min-h-[60px] leading-relaxed"
-              />
-            ) : (
-              <p className="text-[13px] leading-relaxed text-neutral-700">
-                {pkg.blogBody.replace(/<[^>]*>/g, '').substring(0, 300)}...
-              </p>
+              <>
+                <h2 className="text-lg font-serif leading-tight mb-2.5">{pkg.headline}</h2>
+                <div className="text-[11px] text-neutral-400 mb-3">By Luna Yu · {pkg.wordCount} words</div>
+                <p className="text-[13px] leading-relaxed text-neutral-700">
+                  {pkg.blogBody.replace(/<[^>]*>/g, '').substring(0, 300)}...
+                </p>
+              </>
             )}
           </div>
         </div>
@@ -272,7 +376,12 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
           <div className="bg-white rounded-[10px] text-neutral-950 overflow-hidden">
             {/* Subject + preview */}
             <div className="p-3.5 bg-neutral-50 border-b border-neutral-100">
-              {editing ? (
+              {repromptLoading === 'email' ? (
+                <div className="flex flex-col gap-1.5">
+                  <ShimmerBlock height="16px" />
+                  <ShimmerBlock height="12px" />
+                </div>
+              ) : editing ? (
                 <>
                   <input
                     defaultValue={editValues.subjectLine ?? pkg.subjectLine}
@@ -284,9 +393,11 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
                   </div>
                 </>
               ) : (
-                <div className="text-xs font-semibold">{pkg.subjectLine}</div>
+                <>
+                  <div className="text-xs font-semibold">{pkg.subjectLine}</div>
+                  <div className="text-[10px] text-neutral-400 mt-0.5">{pkg.previewText}</div>
+                </>
               )}
-              <div className="text-[10px] text-neutral-400 mt-0.5">{pkg.previewText}</div>
             </div>
 
             {/* Hero image */}
@@ -303,7 +414,13 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
 
             {/* Body */}
             <div className="p-3.5">
-              {editing ? (
+              {repromptLoading === 'email' ? (
+                <div className="flex flex-col gap-2 mb-3">
+                  <ShimmerBlock height="14px" />
+                  <ShimmerBlock height="14px" />
+                  <ShimmerBlock height="14px" />
+                </div>
+              ) : editing ? (
                 <textarea
                   defaultValue={editValues.emailBody ?? pkg.emailBody}
                   onChange={e => setEditValues(prev => ({ ...prev, emailBody: e.target.value }))}
@@ -358,6 +475,12 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
               Edit <Kbd>E</Kbd>
             </button>
             <button
+              onClick={() => { setReprompting(r => !r); setRepromptInstruction(''); }}
+              className="px-6 py-2.5 rounded-lg border border-neutral-700 bg-transparent text-neutral-300 text-[13px] font-semibold cursor-pointer flex items-center gap-1.5"
+            >
+              Reprompt <Kbd>P</Kbd>
+            </button>
+            <button
               onClick={() => setStatus('approved')}
               className="px-7 py-2.5 rounded-lg border-none bg-success text-white text-[13px] font-semibold cursor-pointer flex items-center gap-1.5"
             >
@@ -366,9 +489,46 @@ export function Review({ segmentId, onComplete }: ReviewProps) {
           </>
         )}
       </div>
-      {!editing && (
+
+      {/* Reprompt panel */}
+      {reprompting && (
+        <div className="mt-3 flex flex-col gap-2.5 max-w-[600px] mx-auto">
+          <input
+            ref={repromptInputRef}
+            type="text"
+            value={repromptInstruction}
+            onChange={e => setRepromptInstruction(e.target.value)}
+            placeholder="e.g., Make it shorter and more urgent"
+            className="w-full px-3.5 py-2.5 rounded-lg bg-neutral-800 border border-neutral-600 text-neutral-100 text-[13px] placeholder:text-neutral-500 outline-none focus:border-primary-500 transition-colors"
+            onKeyDown={e => {
+              if (e.key === 'Escape') { setReprompting(false); setRepromptInstruction(''); }
+            }}
+            disabled={repromptLoading !== null}
+          />
+          <div className="flex justify-center gap-2">
+            <button
+              onClick={handleRepromptBlog}
+              disabled={!repromptInstruction.trim() || repromptLoading !== null}
+              className="px-5 py-2 rounded-lg border-none text-white text-[13px] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              style={{ backgroundColor: color }}
+            >
+              {repromptLoading === 'blog' ? 'Reprompting...' : 'Reprompt Blog'}
+            </button>
+            <button
+              onClick={handleRepromptEmail}
+              disabled={!repromptInstruction.trim() || repromptLoading !== null}
+              className="px-5 py-2 rounded-lg border-none text-white text-[13px] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+              style={{ backgroundColor: color }}
+            >
+              {repromptLoading === 'email' ? 'Reprompting...' : 'Reprompt Email'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {!editing && !reprompting && (
         <div className="text-center mt-1.5 text-[11px] text-neutral-700">
-          ← → navigate · L list view
+          ← → navigate · L list view · P reprompt
         </div>
       )}
     </div>
