@@ -1,0 +1,112 @@
+@import "tailwindcss";
+
+@theme {
+  /* Primary — Folly Magenta */
+  --color-primary-50: #FFF0F6;
+  --color-primary-100: #FFD6E8;
+  --color-primary-200: #FFB3D4;
+  --color-primary-300: #FF85B8;
+  --color-primary-400: #FF5C9E;
+  --color-primary-500: #E8457A;
+  --color-primary-600: #CC3366;
+  --color-primary-700: #A62653;
+  --color-primary-800: #801A3F;
+  --color-primary-900: #5C102D;
+
+  /* Segment Accent Colors */
+  --color-seg-glp1: #5B9A8B;
+  --color-seg-postpartum: #C4956A;
+  --color-seg-perimeno: #8B7EC8;
+  --color-seg-pillfatigue: #D4A843;
+
+  /* Neutrals — warm dark palette */
+  --color-neutral-0: #FFFFFF;
+  --color-neutral-50: #F7F5F3;
+  --color-neutral-100: #EBE8E4;
+  --color-neutral-200: #D4D0CB;
+  --color-neutral-300: #B8B3AC;
+  --color-neutral-400: #9A948C;
+  --color-neutral-500: #7A746C;
+  --color-neutral-600: #5C5750;
+  --color-neutral-700: #3E3A35;
+  --color-neutral-800: #2A2723;
+  --color-neutral-900: #1E1B18;
+  --color-neutral-950: #141210;
+
+  /* Semantic */
+  --color-success: #5B9A6B;
+  --color-warning: #D4A843;
+  --color-error: #C75450;
+  --color-info: #6B8FC7;
+
+  /* Font families */
+  --font-sans: 'DM Sans', system-ui, sans-serif;
+  --font-serif: 'Instrument Serif', Georgia, serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  /* Border radius */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+}
+
+/* Base styles */
+html {
+  background-color: var(--color-neutral-950);
+  color: var(--color-neutral-50);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--color-neutral-700); border-radius: 3px; }
+
+/* Animations */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fadeSlideIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-opacity {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Utility classes */
+.animate-in {
+  animation: fadeSlideIn 0.25s cubic-bezier(0, 0, 0.2, 1);
+}
+
+.skeleton {
+  background: linear-gradient(90deg, var(--color-neutral-700) 0%, var(--color-neutral-600) 50%, var(--color-neutral-700) 100%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-md);
+}
+
+.pulse-dot {
+  animation: pulse-opacity 1s infinite;
+}

@@ -1,0 +1,164 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { TopBar } from '@/components/TopBar';
+import { PhaseStepper } from '@/components/PhaseStepper';
+import { RunHome } from '@/views/RunHome';
+import { Research } from '@/views/Research';
+import { TopicImport } from '@/views/TopicImport';
+import { ContentGeneration } from '@/views/ContentGeneration';
+import { ImageGeneration } from '@/views/ImageGeneration';
+import { Review } from '@/views/Review';
+import { Publish } from '@/views/Publish';
+import { StateContext, ActionsContext, loadState, saveState } from '@/lib/store';
+import type { AppState, ContentPackage, TopicBrief, ScheduleEntry, PublishReceipt } from '@/lib/types';
+
+export default function App() {
+  const [state, setState] = useState<AppState>(loadState);
+  const [activeSegment, setActiveSegment] = useState<string | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+
+  // Persist state to localStorage as a side-effect
+  useEffect(() => {
+    saveState(state);
+  }, [state]);
+
+  // Actions object is stable (never changes reference).
+  // Each method uses setState's functional updater so it always reads fresh state.
+  const actions = useRef({
+    getActiveRun() {
+      const s = stateRef.current;
+      return s.runs[s.activeRunId];
+    },
+    getSegmentState(segId: string) {
+      const s = stateRef.current;
+      return s.runs[s.activeRunId]?.segments[segId];
+    },
+    setSegmentPhase(segId: string, phase: number) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId] };
+        run.segments = { ...run.segments, [segId]: { ...run.segments[segId], phase } };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
+    setTopics(segId: string, topics: TopicBrief[]) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId] };
+        run.segments = { ...run.segments, [segId]: { ...run.segments[segId], topics } };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
+    setPackages(segId: string, packages: ContentPackage[]) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId] };
+        run.segments = { ...run.segments, [segId]: { ...run.segments[segId], packages } };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
+    updatePackage(segId: string, pkgId: string, updates: Partial<ContentPackage>) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId] };
+        const segState = { ...run.segments[segId] };
+        segState.packages = segState.packages.map(p =>
+          p.id === pkgId ? { ...p, ...updates } : p
+        );
+        run.segments = { ...run.segments, [segId]: segState };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
+    setSchedule(segId: string, schedule: ScheduleEntry[]) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId] };
+        run.segments = { ...run.segments, [segId]: { ...run.segments[segId], schedule } };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
+    setPublishReceipt(segId: string, receipt: PublishReceipt) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId] };
+        run.segments = { ...run.segments, [segId]: { ...run.segments[segId], publishReceipt: receipt } };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
+  }).current;
+
+  const run = state.runs[state.activeRunId];
+  const currentPhase = activeSegment ? (run?.segments[activeSegment]?.phase ?? 0) : -1;
+
+  const handlePhaseClick = useCallback((phase: number) => {
+    if (activeSegment) {
+      actions.setSegmentPhase(activeSegment, phase);
+    }
+  }, [activeSegment, actions]);
+
+  const advancePhase = useCallback(() => {
+    if (activeSegment) {
+      const current = stateRef.current.runs[stateRef.current.activeRunId]?.segments[activeSegment]?.phase ?? 0;
+      actions.setSegmentPhase(activeSegment, Math.min(current + 1, 6));
+    }
+  }, [activeSegment, actions]);
+
+  const goHome = useCallback(() => setActiveSegment(null), []);
+
+  return (
+    <ActionsContext.Provider value={actions}>
+    <StateContext.Provider value={state}>
+      <div className="w-full min-h-screen bg-neutral-950 text-neutral-50 font-sans">
+        <TopBar
+          activeSegment={activeSegment}
+          onSegmentSelect={setActiveSegment}
+          onHome={goHome}
+        />
+
+        {activeSegment && currentPhase < 6 && (
+          <PhaseStepper
+            segmentId={activeSegment}
+            currentPhase={currentPhase}
+            onPhaseClick={handlePhaseClick}
+          />
+        )}
+
+        <div className="px-6 py-7">
+          {!activeSegment && (
+            <RunHome onSegmentSelect={setActiveSegment} />
+          )}
+
+          {activeSegment && currentPhase === 0 && (
+            <Research segmentId={activeSegment} onComplete={advancePhase} />
+          )}
+          {activeSegment && currentPhase === 1 && (
+            <TopicImport segmentId={activeSegment} onComplete={advancePhase} />
+          )}
+          {activeSegment && currentPhase === 2 && (
+            <ContentGeneration segmentId={activeSegment} onComplete={advancePhase} />
+          )}
+          {activeSegment && currentPhase === 3 && (
+            <ImageGeneration segmentId={activeSegment} onComplete={advancePhase} />
+          )}
+          {activeSegment && currentPhase === 4 && (
+            <Review segmentId={activeSegment} onComplete={advancePhase} />
+          )}
+          {activeSegment && currentPhase === 5 && (
+            <Publish segmentId={activeSegment} onComplete={advancePhase} />
+          )}
+
+          {activeSegment && currentPhase >= 6 && (
+            <div className="text-center py-20">
+              <div className="w-[52px] h-[52px] rounded-full bg-success flex items-center justify-center mx-auto mb-4 text-xl text-white">
+                ✓
+              </div>
+              <h2 className="text-[22px] font-semibold mb-2">Segment complete</h2>
+              <p className="text-neutral-500 mb-5">All packages published.</p>
+              <button
+                onClick={goHome}
+                className="px-7 py-3 rounded-[10px] border-none cursor-pointer text-white text-sm font-semibold bg-primary-500 hover:brightness-110 transition-[filter]"
+              >
+                ← Back to Run Home
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </StateContext.Provider>
+    </ActionsContext.Provider>
+  );
+}

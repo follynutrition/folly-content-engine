@@ -1,0 +1,99 @@
+{
+  "id": "folly-segments",
+  "version": "1.0",
+  "description": "Segment definitions used across the entire Content Engine. Colors, subreddit sources, Klaviyo segment IDs (fill in after setup), and default send schedules.",
+
+  "segments": [
+    {
+      "id": "glp1",
+      "name": "GLP-1",
+      "display_name": "GLP-1 Shedding",
+      "color": "#5B9A8B",
+      "description": "Women experiencing hair loss/shedding from GLP-1 medications (semaglutide, tirzepatide, etc.)",
+      "klaviyo_segment_id": "FILL_AFTER_SETUP",
+      "alia_survey_value": "GLP-1 / Weight Loss",
+      "reddit_sources": ["r/Ozempic", "r/semaglutide", "r/tirzepatide", "r/GLP1"],
+      "google_seed_queries": [
+        "GLP-1 hair loss",
+        "semaglutide hair loss",
+        "Ozempic hair loss timeline",
+        "tirzepatide hair shedding",
+        "GLP-1 nutrient deficiency hair"
+      ],
+      "default_send_time": "08:00",
+      "send_timezone": "recipient_local"
+    },
+    {
+      "id": "postpartum",
+      "name": "Postpartum",
+      "display_name": "Postpartum Hair Loss",
+      "color": "#C4956A",
+      "description": "Women experiencing hair loss after pregnancy, during breastfeeding, or in the first year postpartum.",
+      "klaviyo_segment_id": "FILL_AFTER_SETUP",
+      "alia_survey_value": "Postpartum / New Mom",
+      "reddit_sources": ["r/beyondthebump", "r/postpartum", "r/newparents", "r/breastfeeding"],
+      "google_seed_queries": [
+        "postpartum hair loss",
+        "breastfeeding hair loss",
+        "when does postpartum shedding stop",
+        "postpartum hair regrowth timeline",
+        "vitamins for postpartum hair"
+      ],
+      "default_send_time": "10:00",
+      "send_timezone": "recipient_local"
+    },
+    {
+      "id": "perimeno",
+      "name": "Perimeno",
+      "display_name": "Perimenopause / Hormonal",
+      "color": "#8B7EC8",
+      "description": "Women experiencing hair thinning due to perimenopause, menopause, hormonal changes, PCOS, or thyroid issues.",
+      "klaviyo_segment_id": "FILL_AFTER_SETUP",
+      "alia_survey_value": "Hormonal / Menopause",
+      "reddit_sources": ["r/menopause", "r/perimenopause", "r/PCOS", "r/thyroid"],
+      "google_seed_queries": [
+        "menopause hair thinning",
+        "perimenopause hair loss",
+        "hormone hair loss women",
+        "thyroid hair loss",
+        "PCOS hair thinning"
+      ],
+      "default_send_time": "12:00",
+      "send_timezone": "recipient_local"
+    },
+    {
+      "id": "pillfatigue",
+      "name": "Pill-Fatigue",
+      "display_name": "Supplement Switchers",
+      "color": "#D4A843",
+      "description": "Women who've tried other hair supplements (Nutrafol, Viviscal, biotin) and are frustrated with results, tired of pills, or looking for something better.",
+      "klaviyo_segment_id": "FILL_AFTER_SETUP",
+      "alia_survey_value": "Tried Other Supplements",
+      "reddit_sources": ["r/Supplements", "r/FemaleHairLoss", "r/HairLoss", "r/Nutrafol"],
+      "google_seed_queries": [
+        "Nutrafol alternatives",
+        "best hair supplements women",
+        "hair supplement side effects",
+        "Nutrafol not working",
+        "tired of hair loss pills"
+      ],
+      "default_send_time": "19:00",
+      "send_timezone": "recipient_local"
+    }
+  ],
+
+  "schedule_defaults": {
+    "emails_per_week": 5,
+    "send_days": ["monday", "tuesday", "wednesday", "thursday", "friday"],
+    "stagger_note": "Each segment sends at a different time to avoid overlapping Klaviyo sends and to match the audience's likely availability."
+  },
+
+  "brand_constants": {
+    "primary_color": "#E8457A",
+    "offer_code": "TRYFOLLY1",
+    "offer_text": "Try Folly for $1",
+    "blog_author": "Luna Yu",
+    "blog_base_url": "https://follynutrition.com/blogs/",
+    "shopify_blog_handle": "FILL_AFTER_SETUP"
+  }
+}

@@ -1,0 +1,76 @@
+{
+  "id": "topic-brief-schema",
+  "version": "1.0",
+  "description": "Schema for validating topic brief imports (CSV or JSON). Used by the import validator in Phase 2 (Topic Import). All fields are required unless marked optional.",
+
+  "fields": {
+    "headline": {
+      "type": "string",
+      "required": true,
+      "max_length": 120,
+      "description": "Suggested blog headline. Editable in the app after import."
+    },
+    "source_question": {
+      "type": "string",
+      "required": true,
+      "max_length": 300,
+      "description": "The actual question a real person asked (from Reddit, Google PAA, etc). Displayed as 'Answering: \"...\"' throughout the pipeline. This is the grounding anchor."
+    },
+    "emotion": {
+      "type": "string",
+      "required": true,
+      "allowed_values": ["scared", "confused", "anxious", "frustrated", "angry", "worried", "desperate", "panicked", "hopeful", "seeking"],
+      "description": "The emotional state of the person asking the question. Used for content tone calibration and displayed as a tag."
+    },
+    "folly_hook": {
+      "type": "string",
+      "required": true,
+      "max_length": 200,
+      "description": "The specific Folly science claim that addresses this question. Must be grounded in actual Folly science docs (1675mg actives, microsphere encapsulation, 98% B12 protection, 4-35x potency, etc). Passed to Claude as context for blog generation."
+    },
+    "suggested_subject_line": {
+      "type": "string",
+      "required": true,
+      "max_length": 60,
+      "description": "Suggested email subject line. Should be under 50 chars (the app will flag if over). Editable after import."
+    },
+    "segment": {
+      "type": "string",
+      "required": true,
+      "allowed_values": ["glp1", "postpartum", "perimeno", "pillfatigue"],
+      "description": "Target segment. Must match one of the 4 segment IDs."
+    },
+    "freshness": {
+      "type": "string",
+      "required": false,
+      "default": "evergreen",
+      "allowed_values": ["trending", "evergreen", "seasonal"],
+      "description": "How time-sensitive this topic is. Optional — defaults to evergreen."
+    }
+  },
+
+  "import_formats": {
+    "csv": {
+      "delimiter": ",",
+      "quote_char": "\"",
+      "header_row": true,
+      "encoding": "utf-8",
+      "notes": "CSV is the primary import format. Headers must match field names exactly. See topic-brief-template.csv for example."
+    },
+    "json": {
+      "format": "array of objects",
+      "example": "[{\"headline\": \"...\", \"source_question\": \"...\", ...}]",
+      "notes": "JSON is the secondary format for programmatic imports or NotebookLM data table exports converted to JSON."
+    }
+  },
+
+  "validation_behavior": {
+    "on_missing_required_field": "reject_row",
+    "on_invalid_enum_value": "reject_row",
+    "on_excess_length": "warn_not_reject",
+    "on_empty_file": "show_error",
+    "error_format": "Row {{row}}: Missing required field '{{field}}'",
+    "show_first_n_errors": 10,
+    "notes": "Rejected rows are shown in an error summary. Valid rows are imported. Benoit can fix the CSV and re-import just the rejected rows."
+  }
+}

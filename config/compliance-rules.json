@@ -1,0 +1,182 @@
+{
+  "id": "folly-compliance-scanner",
+  "version": "1.0",
+  "description": "Client-side compliance rules. Runs after content generation on every blog and email. Hard flags auto-set package to 'Needs Edit'. Soft flags show warning but don't block approval.",
+
+  "hard_flags": {
+    "description": "Medical/legal violations. Package auto-set to 'Needs Edit' status.",
+    "label_prefix": "⚠ COMPLIANCE",
+    "rules": [
+      {
+        "id": "medical-regrowth",
+        "pattern": "\\b(regrowth|re-growth|hair regrowth|regrow)\\b",
+        "case_sensitive": false,
+        "message": "Contains '{{match}}' — use 'hair health' or 'hair strength'",
+        "applies_to": ["blog_body", "blog_headline", "email_body", "meta_description"]
+      },
+      {
+        "id": "medical-treats",
+        "pattern": "\\b(treats|treat|cures|cure|reverses|reverse|prevents hair loss|stops hair loss)\\b",
+        "case_sensitive": false,
+        "message": "Contains '{{match}}' — use 'supports' or 'promotes'",
+        "applies_to": ["blog_body", "blog_headline", "email_body", "meta_description"]
+      },
+      {
+        "id": "medical-clinically-proven",
+        "pattern": "clinically\\s+proven",
+        "case_sensitive": false,
+        "message": "Contains 'Clinically Proven' — use 'Clinically Studied'",
+        "applies_to": ["blog_body", "blog_headline", "email_body", "meta_description"]
+      },
+      {
+        "id": "medical-diagnosis",
+        "pattern": "\\b(diagnos(e|es|ed|is)|prescri(be|bed|ption)|dosage|milligram|\\d+\\s*mg)\\b",
+        "case_sensitive": false,
+        "message": "Contains medical/prescribing language '{{match}}' — remove or add 'talk to your doctor'",
+        "applies_to": ["blog_body", "email_body"]
+      },
+      {
+        "id": "competitor-name-in-blog",
+        "pattern": "\\b(Nutrafol|Viviscal|Rogaine|Minoxidil|Hims|Hers|Keeps)\\b",
+        "case_sensitive": false,
+        "message": "Contains competitor name '{{match}}' in blog body — remove (OK in meta_description only)",
+        "applies_to": ["blog_body"]
+      }
+    ]
+  },
+
+  "soft_flags": {
+    "description": "Limit violations. Show warning, don't block approval.",
+    "label_prefix": "⚠",
+    "rules": [
+      {
+        "id": "subject-length",
+        "type": "char_count",
+        "field": "subject_line",
+        "max": 50,
+        "message": "Subject line {{count}} chars (max 50)"
+      },
+      {
+        "id": "preview-length",
+        "type": "char_count",
+        "field": "preview_text",
+        "max": 90,
+        "message": "Preview text {{count}} chars (max 90)"
+      },
+      {
+        "id": "email-body-length",
+        "type": "word_count",
+        "field": "email_body",
+        "max": 50,
+        "message": "Email body {{count}} words (max 50)"
+      },
+      {
+        "id": "blog-too-long",
+        "type": "word_count",
+        "field": "blog_body",
+        "max": 500,
+        "message": "Blog {{count}} words (max 500)"
+      },
+      {
+        "id": "blog-too-short",
+        "type": "word_count",
+        "field": "blog_body",
+        "min": 300,
+        "message": "Blog {{count}} words (min 300)"
+      },
+      {
+        "id": "meta-title-length",
+        "type": "char_count",
+        "field": "meta_title",
+        "max": 60,
+        "message": "Meta title {{count}} chars (max 60)"
+      },
+      {
+        "id": "meta-description-length",
+        "type": "char_count",
+        "field": "meta_description",
+        "max": 155,
+        "message": "Meta description {{count}} chars (max 155)"
+      }
+    ]
+  },
+
+  "ai_slop_flags": {
+    "description": "AI-generated cliche phrases. Soft flag — warning only.",
+    "label_prefix": "⚠ SLOP",
+    "phrases": [
+      "In today's world",
+      "In today's fast-paced",
+      "Let's dive in",
+      "Let's dive deep",
+      "Here's the thing",
+      "Game-changer",
+      "Game changer",
+      "Journey",
+      "Unlock",
+      "Unlocking",
+      "Revolutionary",
+      "Revolutionize",
+      "It's no secret",
+      "The truth is",
+      "Look no further",
+      "At the end of the day",
+      "It goes without saying",
+      "In this article",
+      "Without further ado",
+      "Needless to say",
+      "It's worth noting",
+      "Elevate your",
+      "Take your hair to the next level",
+      "Say goodbye to",
+      "Transform your",
+      "Embark on",
+      "Navigate the",
+      "Landscape",
+      "Paradigm",
+      "Synergy",
+      "Holistic approach",
+      "Cutting-edge",
+      "State-of-the-art",
+      "Comprehensive guide",
+      "Ultimate guide",
+      "Everything you need to know"
+    ],
+    "message": "Contains AI slop phrase '{{match}}' — rewrite in Luna's voice",
+    "applies_to": ["blog_body", "blog_headline", "email_body"]
+  },
+
+  "brand_flags": {
+    "description": "Brand voice violations. Soft flag.",
+    "rules": [
+      {
+        "id": "urgency-language",
+        "pattern": "\\b(limited time|don't miss out|last chance|act now|hurry|expires|only \\d+ left)\\b",
+        "case_sensitive": false,
+        "message": "Contains urgency language '{{match}}' — Folly doesn't use pressure tactics",
+        "applies_to": ["email_body", "subject_line"]
+      },
+      {
+        "id": "cancel-anytime",
+        "pattern": "cancel\\s*(any\\s*time|whenever)",
+        "case_sensitive": false,
+        "message": "Contains 'cancel anytime' — Folly brand rule: never use this phrase",
+        "applies_to": ["blog_body", "email_body"]
+      },
+      {
+        "id": "percentage-off",
+        "pattern": "\\d+%\\s*off",
+        "case_sensitive": false,
+        "message": "Contains percentage-off framing — Folly uses $1 first month, not discounts",
+        "applies_to": ["blog_body", "email_body", "subject_line"]
+      }
+    ]
+  },
+
+  "payoff_leak_check": {
+    "description": "Checks if the email body contains key phrases from the blog, indicating the teaser is giving away the payoff. This is a heuristic — it extracts 3-5 word phrases from the blog's key insight paragraphs and checks if they appear in the email.",
+    "enabled": true,
+    "min_phrase_length": 4,
+    "message": "Email may be leaking the blog's payoff — found '{{match}}' in both blog and email body"
+  }
+}
