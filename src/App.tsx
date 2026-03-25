@@ -1,14 +1,15 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { TopBar } from '@/components/TopBar';
 import { PhaseStepper } from '@/components/PhaseStepper';
+import { Breadcrumb } from '@/components/Breadcrumb';
 import { RunHome } from '@/views/RunHome';
-import { ResearchAndTopics } from '@/views/ResearchAndTopics';
+import { Topics } from '@/views/Topics';
 import { ContentGeneration } from '@/views/ContentGeneration';
 import { Review } from '@/views/Review';
 import { Publish } from '@/views/Publish';
 import { CommandPalette } from '@/components/CommandPalette';
 import { StateContext, ActionsContext, loadState, saveState } from '@/lib/store';
-import type { AppState, ContentPackage, TopicBrief, ScheduleEntry, PublishReceipt } from '@/lib/types';
+import type { AppState, ContentPackage, TopicBrief, TopicStatus, ScheduleEntry, PublishReceipt } from '@/lib/types';
 
 export default function App() {
   const [state, setState] = useState<AppState>(loadState);
@@ -47,6 +48,27 @@ export default function App() {
         return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
       });
     },
+    addTopics(segId: string, newTopics: TopicBrief[]) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId] };
+        const segState = { ...run.segments[segId] };
+        segState.topics = [...newTopics, ...segState.topics];
+        run.segments = { ...run.segments, [segId]: segState };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
+    updateTopicStatus(segId: string, topicIds: string[], status: TopicStatus) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId] };
+        const segState = { ...run.segments[segId] };
+        const idSet = new Set(topicIds);
+        segState.topics = segState.topics.map(t =>
+          idSet.has(t.id) ? { ...t, status } : t
+        );
+        run.segments = { ...run.segments, [segId]: segState };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
     setPackages(segId: string, packages: ContentPackage[]) {
       setState(prev => {
         const run = { ...prev.runs[prev.activeRunId] };
@@ -76,6 +98,12 @@ export default function App() {
       setState(prev => {
         const run = { ...prev.runs[prev.activeRunId] };
         run.segments = { ...run.segments, [segId]: { ...run.segments[segId], publishReceipt: receipt } };
+        return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
+      });
+    },
+    setRunLabel(label: string) {
+      setState(prev => {
+        const run = { ...prev.runs[prev.activeRunId], label };
         return { ...prev, runs: { ...prev.runs, [prev.activeRunId]: run } };
       });
     },
@@ -114,7 +142,7 @@ export default function App() {
   return (
     <ActionsContext.Provider value={actions}>
     <StateContext.Provider value={state}>
-      <div className="w-full min-h-screen bg-neutral-950 text-neutral-50 font-sans">
+      <div className="w-full min-h-screen bg-neutral-50 text-neutral-900 font-sans">
         <CommandPalette
           isOpen={cmdPaletteOpen}
           onClose={() => setCmdPaletteOpen(false)}
@@ -127,11 +155,14 @@ export default function App() {
         />
 
         {activeSegment && currentPhase < 4 && (
-          <PhaseStepper
-            segmentId={activeSegment}
-            currentPhase={currentPhase}
-            onPhaseClick={handlePhaseClick}
-          />
+          <>
+            <PhaseStepper
+              segmentId={activeSegment}
+              currentPhase={currentPhase}
+              onPhaseClick={handlePhaseClick}
+            />
+            <Breadcrumb segmentId={activeSegment} currentPhase={currentPhase} />
+          </>
         )}
 
         <div className="px-6 py-7">
@@ -140,7 +171,7 @@ export default function App() {
           )}
 
           {activeSegment && currentPhase === 0 && (
-            <ResearchAndTopics segmentId={activeSegment} onComplete={advancePhase} />
+            <Topics segmentId={activeSegment} onComplete={advancePhase} />
           )}
           {activeSegment && currentPhase === 1 && (
             <ContentGeneration segmentId={activeSegment} onComplete={advancePhase} />

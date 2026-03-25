@@ -34,7 +34,6 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
   const commands = useMemo((): Command[] => {
     const cmds: Command[] = [];
 
-    // Navigation
     cmds.push({
       id: 'home',
       label: 'Go to Run Home',
@@ -55,7 +54,6 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
         category: 'Segments',
       });
 
-      // Add packages as searchable items
       const packages = segState?.packages ?? [];
       for (const pkg of packages) {
         cmds.push({
@@ -103,46 +101,42 @@ export function CommandPalette({ isOpen, onClose, onNavigate }: CommandPalettePr
 
   return (
     <>
-      {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/50 z-50"
+        className="fixed inset-0 bg-black/20 z-50"
         onClick={onClose}
       />
-      {/* Palette */}
-      <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[520px] max-w-[90vw] bg-neutral-900 border border-neutral-700 rounded-xl shadow-2xl z-50 overflow-hidden"
+      <div className="fixed top-[20%] left-1/2 -translate-x-1/2 w-[520px] max-w-[90vw] bg-white border border-neutral-200 rounded-xl shadow-2xl z-50 overflow-hidden"
         style={{ animation: 'fadeSlideIn 0.15s ease-out' }}
       >
-        {/* Search input */}
-        <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-700">
-          <MagnifyingGlass size={18} className="text-neutral-500 shrink-0" />
+        <div className="flex items-center gap-3 px-4 py-3 border-b border-neutral-200">
+          <MagnifyingGlass size={18} className="text-neutral-400 shrink-0" />
           <input
             ref={inputRef}
             value={query}
             onChange={e => setQuery(e.target.value)}
             placeholder="Search segments, packages, actions..."
-            className="flex-1 bg-transparent border-none text-sm text-neutral-50 placeholder:text-neutral-600 focus:outline-none"
+            className="flex-1 bg-transparent border-none text-sm text-neutral-900 placeholder:text-neutral-400 focus:outline-none"
           />
-          <span className="text-[10px] text-neutral-600 font-mono px-1.5 py-0.5 rounded bg-neutral-800 border border-neutral-700">ESC</span>
+          <span className="text-[10px] text-neutral-400 font-mono px-1.5 py-0.5 rounded bg-neutral-100 border border-neutral-200">ESC</span>
         </div>
 
-        {/* Results */}
         <div className="max-h-[300px] overflow-y-auto py-1">
           {filtered.length === 0 && (
-            <div className="px-4 py-6 text-center text-sm text-neutral-600">No results found</div>
+            <div className="px-4 py-6 text-center text-sm text-neutral-400">No results found</div>
           )}
           {filtered.map((cmd, i) => (
             <div
               key={cmd.id}
               onClick={cmd.action}
               className="flex items-center justify-between px-4 py-2.5 cursor-pointer transition-colors"
-              style={{ backgroundColor: i === selectedIndex ? 'var(--color-neutral-800)' : 'transparent' }}
+              style={{ backgroundColor: i === selectedIndex ? 'var(--color-neutral-100)' : 'transparent' }}
               onMouseEnter={() => setSelectedIndex(i)}
             >
               <div>
-                <div className="text-sm text-neutral-50">{cmd.label}</div>
-                {cmd.sublabel && <div className="text-[11px] text-neutral-500">{cmd.sublabel}</div>}
+                <div className="text-sm text-neutral-900">{cmd.label}</div>
+                {cmd.sublabel && <div className="text-[11px] text-neutral-400">{cmd.sublabel}</div>}
               </div>
-              <span className="text-[10px] text-neutral-600 font-mono">{cmd.category}</span>
+              <span className="text-[10px] text-neutral-400 font-mono">{cmd.category}</span>
             </div>
           ))}
         </div>

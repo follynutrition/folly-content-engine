@@ -12,6 +12,8 @@ export interface Segment {
   send_timezone: string;
 }
 
+export type TopicStatus = 'new' | 'approved' | 'rejected' | 'content_generated' | 'published';
+
 export interface TopicBrief {
   id: string;
   headline: string;
@@ -22,6 +24,13 @@ export interface TopicBrief {
   segment: string;
   freshness: 'trending' | 'evergreen' | 'seasonal';
   selected: boolean;
+  // New fields for topic queue
+  preview_text?: string;
+  email_body_draft?: string;
+  cta_text?: string;
+  rationale?: string;
+  linked_study_ids?: number[];
+  status?: TopicStatus;
 }
 
 export type EmotionTag =
@@ -76,10 +85,10 @@ export interface ComplianceFlag {
   suggestion?: string;
 }
 
-export type PhaseId = 'research' | 'content' | 'review' | 'publish';
+export type PhaseId = 'topics' | 'content' | 'review' | 'publish';
 
 export const PHASES: { id: PhaseId; label: string; index: number }[] = [
-  { id: 'research', label: 'Research & Topics', index: 0 },
+  { id: 'topics', label: 'Topics', index: 0 },
   { id: 'content', label: 'Content & Images', index: 1 },
   { id: 'review', label: 'Review', index: 2 },
   { id: 'publish', label: 'Publish', index: 3 },

@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { useStoreState, useActions } from '@/lib/store';
-import { getSegment, brandConstants, scheduleDefaults } from '@/lib/config';
-import { Rocket, DownloadSimple, CheckCircle, XCircle } from '@phosphor-icons/react';
+import { getSegment, brandConstants } from '@/lib/config';
+import { Rocket, DownloadSimple, CheckCircle, XCircle, CaretDown, CaretUp, Confetti } from '@phosphor-icons/react';
 
 interface PublishProps {
   segmentId: string;
   onComplete: () => void;
 }
-
-type PublishStep = 'preview' | 'blog_url' | 'publishing' | 'receipt';
 
 const SEND_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
 
@@ -19,14 +17,17 @@ export function Publish({ segmentId, onComplete }: PublishProps) {
   const segState = state.runs[state.activeRunId]?.segments[segmentId];
   const packages = (segState?.packages ?? []).filter(p => p.status === 'approved');
 
-  const [step, setStep] = useState<PublishStep>('preview');
+  const [publishing, setPublishing] = useState(false);
   const [progress, setProgress] = useState(0);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [blogBaseUrl, setBlogBaseUrl] = useState(brandConstants.blog_base_url);
+  const [_celebrateVisible, setCelebrateVisible] = useState(false);
 
   const color = seg?.color ?? '#E8457A';
   const sendTime = seg?.default_send_time ?? '08:00';
+  const receipt = segState?.publishReceipt;
 
-  // Export Matrixify CSV
+  // Export CSV
   const exportCsv = () => {
     const headers = ['Title', 'Body HTML', 'Author', 'Tags', 'Meta Title', 'Meta Description', 'Published', 'Image Src'];
     const rows = packages.map(p => [
@@ -39,11 +40,9 @@ export function Publish({ segmentId, onComplete }: PublishProps) {
       new Date().toISOString(),
       p.blogImageUrl ?? '',
     ]);
-
     const csv = [headers, ...rows].map(row =>
       row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
     ).join('\n');
-
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -53,18 +52,16 @@ export function Publish({ segmentId, onComplete }: PublishProps) {
     URL.revokeObjectURL(url);
   };
 
-  // Simulate publishing
+  // Publish simulation
   const publish = () => {
-    setStep('publishing');
+    setPublishing(true);
     let p = 0;
     const interval = setInterval(() => {
       p += 8;
       setProgress(p);
       if (p >= 100) {
         clearInterval(interval);
-
-        // Create publish receipt
-        const receipt = {
+        const publishReceipt = {
           blogs: packages.map(pkg => ({
             packageId: pkg.id,
             title: pkg.headline,
@@ -79,73 +76,84 @@ export function Publish({ segmentId, onComplete }: PublishProps) {
             status: Math.random() > 0.15 ? 'scheduled' as const : 'failed' as const,
           })),
         };
-
-        actions.setPublishReceipt(segmentId, receipt);
-        setStep('receipt');
+        actions.setPublishReceipt(segmentId, publishReceipt);
+        setPublishing(false);
+        setCelebrateVisible(true);
       }
     }, 200);
   };
 
-  // Receipt view
-  if (step === 'receipt') {
-    const receipt = segState?.publishReceipt;
-    if (!receipt) return null;
-
+  // Receipt view (after publishing)
+  if (receipt) {
     const failedBlogs = receipt.blogs.filter(b => b.status === 'failed');
     const failedCampaigns = receipt.campaigns.filter(c => c.status === 'failed');
+    const liveBlogs = receipt.blogs.filter(b => b.status === 'live').length;
+    const scheduledCampaigns = receipt.campaigns.filter(c => c.status === 'scheduled').length;
+    const hasFailed = failedBlogs.length > 0 || failedCampaigns.length > 0;
 
     return (
       <div className="max-w-[700px] mx-auto">
-        <div className="text-center mb-7">
-          <Rocket size={40} className="mx-auto mb-3 text-primary-500" weight="duotone" />
-          <h2 className="text-[22px] font-semibold mb-1">{seg?.name} Published</h2>
+        {/* Celebration header */}
+        <div className="text-center mb-8 animate-in">
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+            style={{ backgroundColor: `${color}10` }}
+          >
+            <Confetti size={32} weight="duotone" style={{ color }} />
+          </div>
+          <h2 className="text-2xl font-semibold mb-1">{seg?.name} is live!</h2>
           <p className="text-neutral-500 text-sm">
-            {receipt.blogs.length} blogs · {receipt.campaigns.length} campaigns · {scheduleDefaults.send_days.slice(0, packages.length).join('–')} {sendTime}
+            {liveBlogs} blog{liveBlogs !== 1 ? 's' : ''} published · {scheduledCampaigns} campaign{scheduledCampaigns !== 1 ? 's' : ''} scheduled
           </p>
         </div>
 
+        {/* Failed items — show first if any */}
+        {hasFailed && (
+          <div className="mb-5 p-4 rounded-xl border border-error/20 bg-error/5">
+            <div className="text-sm font-semibold text-error mb-2">Some items need attention</div>
+            {failedBlogs.map(blog => (
+              <div key={blog.packageId} className="flex items-center justify-between py-1.5 text-[12px]">
+                <span className="text-neutral-600 truncate flex-1">{blog.title}</span>
+                <span className="text-error font-mono text-[10px] flex items-center gap-1 ml-2">
+                  <XCircle size={12} /> Blog failed
+                </span>
+              </div>
+            ))}
+            {failedCampaigns.map(c => (
+              <div key={c.packageId} className="flex items-center justify-between py-1.5 text-[12px]">
+                <span className="text-neutral-600 truncate flex-1">{c.subject}</span>
+                <span className="text-error font-mono text-[10px] flex items-center gap-1 ml-2">
+                  <XCircle size={12} /> Campaign failed
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Success items */}
         <div className="flex gap-4">
-          {/* Blogs */}
           <div className="flex-1">
-            <div className="text-[10px] text-neutral-600 font-mono tracking-wide uppercase mb-2">
-              Blogs on Shopify
-            </div>
-            {[...failedBlogs, ...receipt.blogs.filter(b => b.status === 'live')].map(blog => (
-              <div key={blog.packageId} className="bg-neutral-800 rounded-[10px] border border-neutral-700 p-2.5 px-3 mb-1">
+            <div className="text-[10px] text-neutral-400 font-mono tracking-wide uppercase mb-2">Blogs</div>
+            {receipt.blogs.filter(b => b.status === 'live').map(blog => (
+              <div key={blog.packageId} className="bg-white rounded-lg border border-neutral-200 p-2.5 px-3 mb-1">
                 <div className="flex justify-between items-center">
-                  <div className="text-xs text-neutral-50 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                    {blog.title}
-                  </div>
-                  <span className="text-[10px] font-mono shrink-0 ml-2 flex items-center gap-1" style={{ color: blog.status === 'live' ? 'var(--color-success)' : 'var(--color-error)' }}>
-                    {blog.status === 'live' ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                    {blog.status}
+                  <span className="text-xs text-neutral-800 flex-1 truncate">{blog.title}</span>
+                  <span className="text-[10px] font-mono text-success flex items-center gap-1 flex-shrink-0 ml-2">
+                    <CheckCircle size={12} /> live
                   </span>
-                </div>
-                <div className="text-[10px] text-neutral-600 font-mono mt-[3px] overflow-hidden text-ellipsis whitespace-nowrap">
-                  {blog.url}
                 </div>
               </div>
             ))}
           </div>
-
-          {/* Campaigns */}
           <div className="flex-1">
-            <div className="text-[10px] text-neutral-600 font-mono tracking-wide uppercase mb-2">
-              Campaigns in Klaviyo
-            </div>
-            {[...failedCampaigns, ...receipt.campaigns.filter(c => c.status === 'scheduled')].map(campaign => (
-              <div key={campaign.packageId} className="bg-neutral-800 rounded-[10px] border border-neutral-700 p-2.5 px-3 mb-1">
+            <div className="text-[10px] text-neutral-400 font-mono tracking-wide uppercase mb-2">Campaigns</div>
+            {receipt.campaigns.filter(c => c.status === 'scheduled').map(c => (
+              <div key={c.packageId} className="bg-white rounded-lg border border-neutral-200 p-2.5 px-3 mb-1">
                 <div className="flex justify-between items-center">
-                  <div className="text-xs text-neutral-50 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-                    ✉ {campaign.subject}
-                  </div>
-                  <span className="text-[10px] font-mono shrink-0 ml-2 flex items-center gap-1" style={{ color: campaign.status === 'scheduled' ? 'var(--color-success)' : 'var(--color-error)' }}>
-                    {campaign.status === 'scheduled' ? <CheckCircle size={12} /> : <XCircle size={12} />}
-                    {campaign.status}
+                  <span className="text-xs text-neutral-800 flex-1 truncate">{c.subject}</span>
+                  <span className="text-[10px] font-mono text-success flex items-center gap-1 flex-shrink-0 ml-2">
+                    <CheckCircle size={12} /> {c.sendDate}
                   </span>
-                </div>
-                <div className="text-[10px] text-neutral-600 mt-[3px]">
-                  {campaign.sendDate} · {seg?.name} segment
                 </div>
               </div>
             ))}
@@ -155,9 +163,9 @@ export function Publish({ segmentId, onComplete }: PublishProps) {
         <div className="text-center mt-8">
           <button
             onClick={onComplete}
-            className="px-7 py-3 rounded-[10px] border-none cursor-pointer text-white text-sm font-semibold bg-primary-500 hover:brightness-110 transition-[filter]"
+            className="px-7 py-3 rounded-xl border-none cursor-pointer text-white text-sm font-semibold bg-primary-500 hover:brightness-110 transition-[filter]"
           >
-            ← Back to Run Home
+            Back to Run Home
           </button>
         </div>
       </div>
@@ -165,12 +173,12 @@ export function Publish({ segmentId, onComplete }: PublishProps) {
   }
 
   // Publishing progress
-  if (step === 'publishing') {
+  if (publishing) {
     return (
       <div className="text-center py-20 max-w-[360px] mx-auto">
-        <Rocket size={40} className="mx-auto mb-4 opacity-80 text-neutral-300" weight="duotone" />
-        <div className="w-full h-1.5 bg-neutral-800 rounded-[3px] overflow-hidden mb-2.5">
-          <div className="h-full rounded-[3px] transition-[width] duration-200" style={{ width: `${progress}%`, backgroundColor: color }} />
+        <Rocket size={40} className="mx-auto mb-4 text-neutral-600" weight="duotone" />
+        <div className="w-full h-1.5 bg-neutral-200 rounded-full overflow-hidden mb-2.5">
+          <div className="h-full rounded-full transition-[width] duration-200" style={{ width: `${progress}%`, backgroundColor: color }} />
         </div>
         <div className="text-[13px] text-neutral-500">
           {progress < 50 ? 'Importing blogs to Shopify...' : 'Creating Klaviyo campaigns...'}
@@ -179,74 +187,69 @@ export function Publish({ segmentId, onComplete }: PublishProps) {
     );
   }
 
-  // Blog URL step
-  if (step === 'blog_url') {
-    return (
-      <div className="max-w-[500px] mx-auto text-center py-10">
-        <h2 className="text-xl font-semibold mb-2">Enter Blog Base URL</h2>
-        <p className="text-neutral-500 text-sm mb-6">
-          After Matrixify import, confirm the Shopify blog URL pattern.
-          The app will construct individual URLs from handles.
-        </p>
-        <input
-          type="text"
-          value={blogBaseUrl}
-          onChange={e => setBlogBaseUrl(e.target.value)}
-          className="w-full px-4 py-2.5 rounded-lg bg-neutral-800 border border-neutral-600 text-neutral-50 text-sm font-mono focus:border-primary-500 focus:outline-none mb-6"
-          placeholder="https://follynutrition.com/blogs/journal/"
-        />
-        <button
-          onClick={publish}
-          className="px-7 py-3 rounded-[10px] border-none cursor-pointer text-white text-sm font-semibold hover:brightness-110 transition-[filter]"
-          style={{ backgroundColor: color }}
-        >
-          Create Klaviyo Campaigns →
-        </button>
-      </div>
-    );
-  }
-
-  // Schedule preview (default)
+  // ═══ Main publish screen — single page ═══
   return (
-    <div className="max-w-[560px] mx-auto text-center py-10">
-      <Rocket size={40} className="mx-auto mb-4 opacity-80 text-neutral-300" weight="duotone" />
-      <h2 className="text-[22px] font-semibold mb-1.5">Ready to publish {seg?.name}</h2>
-      <p className="text-neutral-500 text-sm leading-relaxed mb-2">
-        {packages.length} blogs → Shopify via Matrixify<br />
-        {packages.length} campaigns → Klaviyo via MCP
-      </p>
-
-      {/* Export CSV button */}
-      <button
-        onClick={exportCsv}
-        className="mx-auto mb-6 px-4 py-2 rounded-lg border border-neutral-700 bg-transparent text-neutral-300 text-xs cursor-pointer flex items-center gap-1.5 hover:border-neutral-500 transition-colors"
-      >
-        <DownloadSimple size={14} /> Export Matrixify CSV
-      </button>
-
-      {/* Schedule */}
-      <div className="text-[10px] text-neutral-600 font-mono tracking-wide uppercase mb-2 text-left">
-        Schedule
+    <div className="max-w-[600px] mx-auto py-6">
+      <div className="text-center mb-8">
+        <Rocket size={40} className="mx-auto mb-3 text-neutral-600" weight="duotone" />
+        <h2 className="text-xl font-semibold mb-1">Ready to publish {seg?.name}</h2>
+        <p className="text-neutral-500 text-sm">
+          {packages.length} blogs → Shopify · {packages.length} campaigns → Klaviyo
+        </p>
       </div>
-      <div className="text-left">
+
+      {/* Schedule table */}
+      <div className="bg-white rounded-xl border border-neutral-200 overflow-hidden mb-5">
+        <div className="px-4 py-2.5 border-b border-neutral-200 flex items-center justify-between">
+          <span className="text-[10px] text-neutral-400 font-mono uppercase tracking-wide">Send Schedule</span>
+          <button
+            onClick={exportCsv}
+            className="flex items-center gap-1.5 text-[11px] text-neutral-500 bg-transparent border-none cursor-pointer hover:text-neutral-700 transition-colors"
+          >
+            <DownloadSimple size={12} /> Export CSV
+          </button>
+        </div>
         {packages.map((pkg, i) => (
-          <div key={pkg.id} className="flex items-center gap-2.5 py-2 border-b border-neutral-800">
-            <span className="text-xs font-mono w-10" style={{ color }}>{SEND_DAYS[i % 5]}</span>
-            <span className="text-xs text-neutral-500 w-[50px]">{sendTime}</span>
-            <span className="text-xs text-neutral-50 flex-1 overflow-hidden text-ellipsis whitespace-nowrap">
-              ✉ {pkg.subjectLine}
-            </span>
+          <div key={pkg.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-neutral-100 last:border-b-0">
+            <span className="text-xs font-mono w-8 font-semibold" style={{ color }}>{SEND_DAYS[i % 5]}</span>
+            <span className="text-[11px] text-neutral-400 w-[45px]">{sendTime}</span>
+            <span className="text-xs text-neutral-700 flex-1 truncate">{pkg.subjectLine}</span>
           </div>
         ))}
       </div>
 
-      <button
-        onClick={() => setStep('blog_url')}
-        className="mt-7 px-7 py-3 rounded-[10px] border-none cursor-pointer text-white text-sm font-semibold hover:brightness-110 transition-[filter]"
-        style={{ backgroundColor: color }}
-      >
-        Publish {seg?.name} →
-      </button>
+      {/* Advanced: Blog URL (collapsed by default) */}
+      <div className="mb-6">
+        <button
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          className="flex items-center gap-1.5 text-[11px] text-neutral-400 bg-transparent border-none cursor-pointer hover:text-neutral-600 transition-colors"
+        >
+          {showAdvanced ? <CaretUp size={10} /> : <CaretDown size={10} />}
+          Advanced settings
+        </button>
+        {showAdvanced && (
+          <div className="mt-2 animate-in">
+            <label className="text-[11px] text-neutral-400 mb-1 block">Blog base URL</label>
+            <input
+              type="text"
+              value={blogBaseUrl}
+              onChange={e => setBlogBaseUrl(e.target.value)}
+              className="w-full px-3 py-2 rounded-lg bg-neutral-50 border border-neutral-200 text-neutral-900 text-sm font-mono focus:border-neutral-400 focus:outline-none"
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Publish button */}
+      <div className="text-center">
+        <button
+          onClick={publish}
+          className="px-8 py-3.5 rounded-xl border-none cursor-pointer text-white text-sm font-semibold hover:brightness-110 transition-all inline-flex items-center gap-2"
+          style={{ backgroundColor: color }}
+        >
+          <Rocket size={16} weight="fill" /> Publish {packages.length} Packages
+        </button>
+      </div>
     </div>
   );
 }
