@@ -1,5 +1,5 @@
 import { createContext, useContext } from 'react';
-import type { AppState, Run, SegmentState, TopicBrief, ContentPackage, ScheduleEntry, PublishReceipt } from './types';
+import type { AppState, Run, SegmentState, TopicBrief, TopicStatus, ContentPackage, ScheduleEntry, PublishReceipt } from './types';
 import { segments } from './config';
 
 const STORAGE_KEY = 'folly-content-engine';
@@ -22,8 +22,8 @@ function getCurrentRunId(): string {
 
 function getCurrentRunLabel(): string {
   const now = new Date();
-  const month = now.toLocaleString('en-US', { month: 'short' }).toUpperCase();
-  return `${month} ${now.getFullYear()}`;
+  const month = now.toLocaleString('en-US', { month: 'long' });
+  return `${month} ${now.getFullYear()} — Draft`;
 }
 
 function createDefaultRun(): Run {
@@ -90,6 +90,8 @@ export interface StoreActions {
   getSegmentState(segId: string): SegmentState;
   setSegmentPhase(segId: string, phase: number): void;
   setTopics(segId: string, topics: TopicBrief[]): void;
+  addTopics(segId: string, topics: TopicBrief[]): void;
+  updateTopicStatus(segId: string, topicIds: string[], status: TopicStatus): void;
   setPackages(segId: string, packages: ContentPackage[]): void;
   updatePackage(segId: string, pkgId: string, updates: Partial<ContentPackage>): void;
   setSchedule(segId: string, schedule: ScheduleEntry[]): void;

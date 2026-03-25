@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { MagnifyingGlass, UploadSimple, TextT, ArrowUpRight, TrendUp, Plus } from '@phosphor-icons/react';
+import { MagnifyingGlass, UploadSimple, Plus, X, TrendUp, CaretDown, CaretUp, CheckSquare, Square } from '@phosphor-icons/react';
 import { getSegment } from '@/lib/config';
 import { useStoreState, useActions } from '@/lib/store';
 import { getMockResearchResults } from '@/lib/search-mock';
@@ -13,8 +13,9 @@ interface Props {
   onComplete: () => void;
 }
 
-type Tab = 'research' | 'import';
 type ResearchState = 'idle' | 'running' | 'done';
+
+const TOPIC_TARGET = 25;
 
 export function ResearchAndTopics({ segmentId, onComplete }: Props) {
   const state = useStoreState();
@@ -23,7 +24,6 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
   const segState = state.runs[state.activeRunId]?.segments[segmentId];
   const existingTopics = segState?.topics ?? [];
 
-  const [tab, setTab] = useState<Tab>(existingTopics.length > 0 ? 'import' : 'research');
   const [topics, setTopics] = useState<TopicBrief[]>(existingTopics);
 
   // ── Research state ──
@@ -40,8 +40,19 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
   // ── Google Autocomplete state ──
   const [autocompleteSuggestions, setAutocompleteSuggestions] = useState<string[]>([]);
   const [autocompleteLoading, setAutocompleteLoading] = useState(false);
-  const [autocompleteError, setAutocompleteError] = useState<string | null>(null);
   const addedSuggestionsRef = useRef(new Set<string>());
+
+  // ── Add Topics panel open/closed ──
+  const [addPanelOpen, setAddPanelOpen] = useState(topics.length === 0);
+  const [pasteText, setPasteText] = useState('');
+  const [importErrors, setImportErrors] = useState<string[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [dragOver, setDragOver] = useState(false);
+
+  // ── Expanded topic details ──
+  const [expandedTopic, setExpandedTopic] = useState<string | null>(null);
+
+  const color = segment?.color ?? '#E8457A';
 
   // Stream research results
   useEffect(() => {
@@ -58,17 +69,42 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
     return () => clearTimeout(timer);
   }, [researchState, visibleResults.length, allResults, sources]);
 
-  // Fetch Google autocomplete when Reddit research finishes
+  // Auto-convert research results to topics when research is done
+  useEffect(() => {
+    if (researchState !== 'done') return;
+
+    const newTopics: TopicBrief[] = visibleResults.map(r => ({
+      id: generateId(),
+      headline: r.question.length > 80 ? r.question.substring(0, 77) + '...' : r.question,
+      source_question: r.question,
+      emotion: r.emotion,
+      folly_hook: 'Folly\'s microsphere delivery system protects key nutrients through compromised digestion',
+      suggested_subject_line: r.question.substring(0, 45),
+      segment: segmentId,
+      freshness: r.trending ? 'trending' as const : 'evergreen' as const,
+      selected: true,
+    }));
+
+    setTopics(prev => {
+      // Avoid duplicates by checking source_question
+      const existingQuestions = new Set(prev.map(t => t.source_question));
+      const unique = newTopics.filter(t => !existingQuestions.has(t.source_question));
+      return [...prev, ...unique];
+    });
+
+    // Close the add panel since we now have topics
+    setAddPanelOpen(false);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [researchState]);
+
+  // Fetch Google autocomplete when research finishes
   useEffect(() => {
     if (researchState !== 'done') return;
     if (autocompleteSuggestions.length > 0 || autocompleteLoading) return;
-
     const seedQueries = segment?.google_seed_queries ?? [];
     if (seedQueries.length === 0) return;
 
     setAutocompleteLoading(true);
-    setAutocompleteError(null);
-
     fetch('/api/autocomplete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -79,18 +115,14 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
         const data = await res.json();
         setAutocompleteSuggestions(data.suggestions ?? []);
       })
-      .catch((err) => {
-        console.error('Autocomplete fetch failed:', err);
-        setAutocompleteError(err instanceof Error ? err.message : 'Failed to fetch suggestions');
-      })
+      .catch(() => {})
       .finally(() => setAutocompleteLoading(false));
   }, [researchState, segment, autocompleteSuggestions.length, autocompleteLoading]);
 
-  // Add a single autocomplete suggestion as a topic
+  // Add autocomplete suggestion as topic
   const addSuggestionAsTopic = useCallback((suggestion: string) => {
     if (addedSuggestionsRef.current.has(suggestion)) return;
     addedSuggestionsRef.current.add(suggestion);
-
     const topic: TopicBrief = {
       id: generateId(),
       headline: suggestion.length > 80 ? suggestion.substring(0, 77) + '...' : suggestion,
@@ -105,36 +137,10 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
     setTopics(prev => [...prev, topic]);
   }, [segmentId]);
 
-  // ── Import state ──
-  const [pasteText, setPasteText] = useState('');
-  const [importErrors, setImportErrors] = useState<string[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const [dragOver, setDragOver] = useState(false);
-
-  const color = segment?.color ?? '#E8457A';
-
-  // Convert research results to topic briefs
-  const convertResearchToTopics = useCallback(() => {
-    const newTopics: TopicBrief[] = visibleResults.map(r => ({
-      id: generateId(),
-      headline: r.question.length > 80 ? r.question.substring(0, 77) + '...' : r.question,
-      source_question: r.question,
-      emotion: r.emotion,
-      folly_hook: 'Folly\'s microsphere delivery system protects key nutrients through compromised digestion',
-      suggested_subject_line: r.question.substring(0, 45),
-      segment: segmentId,
-      freshness: r.trending ? 'trending' as const : 'evergreen' as const,
-      selected: true,
-    }));
-    setTopics(prev => [...prev, ...newTopics]);
-    setTab('import'); // Switch to topics tab to show the list
-  }, [visibleResults, segmentId]);
-
-  // Parse pasted text into topics (one topic per line)
+  // Parse pasted topics
   const parsePastedTopics = useCallback(() => {
     const lines = pasteText.split('\n').map(l => l.trim()).filter(Boolean);
     if (lines.length === 0) return;
-
     const newTopics: TopicBrief[] = lines.map(line => ({
       id: generateId(),
       headline: line.length > 80 ? line.substring(0, 77) + '...' : line,
@@ -150,7 +156,7 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
     setPasteText('');
   }, [pasteText, segmentId]);
 
-  // Handle CSV/JSON file upload
+  // Handle file upload
   const handleFile = useCallback((file: File) => {
     setImportErrors([]);
     const reader = new FileReader();
@@ -175,7 +181,7 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
       }
     };
     reader.readAsText(file);
-  }, [segmentId]);
+  }, []);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -184,18 +190,23 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
     if (file) handleFile(file);
   }, [handleFile]);
 
-  // Toggle topic selection
+  // Toggle selection
   const toggleTopic = (id: string) => {
     setTopics(prev => prev.map(t => t.id === id ? { ...t, selected: !t.selected } : t));
   };
-
-  // Remove topic
   const removeTopic = (id: string) => {
     setTopics(prev => prev.filter(t => t.id !== id));
   };
 
-  // Submit
+  // Select all / deselect all
   const selectedCount = topics.filter(t => t.selected).length;
+  const allSelected = topics.length > 0 && selectedCount === topics.length;
+  const toggleAll = () => {
+    const newVal = !allSelected;
+    setTopics(prev => prev.map(t => ({ ...t, selected: newVal })));
+  };
+
+  // Submit
   const handleSubmit = () => {
     const selected = topics.filter(t => t.selected);
     actions.setTopics(segmentId, selected);
@@ -204,301 +215,267 @@ export function ResearchAndTopics({ segmentId, onComplete }: Props) {
 
   return (
     <div className="max-w-[800px] mx-auto">
-      {/* Tab bar */}
-      <div className="flex gap-1 mb-6 border-b border-neutral-700 pb-0">
+      {/* ═══ Add Topics Panel (collapsible) ═══ */}
+      <div className="mb-6">
         <button
-          onClick={() => setTab('research')}
-          className={`px-4 py-2.5 text-sm font-medium border-none cursor-pointer transition-colors flex items-center gap-2 ${
-            tab === 'research'
-              ? 'text-neutral-50 border-b-2'
-              : 'bg-transparent text-neutral-500 hover:text-neutral-300'
-          }`}
-          style={tab === 'research' ? { borderBottom: `2px solid ${color}`, color } : {}}
+          onClick={() => setAddPanelOpen(!addPanelOpen)}
+          className="flex items-center gap-2 text-sm font-semibold text-neutral-600 bg-transparent border-none cursor-pointer hover:text-neutral-800 transition-colors mb-3"
         >
-          <MagnifyingGlass size={16} /> Research
-        </button>
-        <button
-          onClick={() => setTab('import')}
-          className={`px-4 py-2.5 text-sm font-medium border-none cursor-pointer transition-colors flex items-center gap-2 ${
-            tab === 'import'
-              ? 'text-neutral-50 border-b-2'
-              : 'bg-transparent text-neutral-500 hover:text-neutral-300'
-          }`}
-          style={tab === 'import' ? { borderBottom: `2px solid ${color}`, color } : {}}
-        >
-          <UploadSimple size={16} /> Import / Paste
-          {topics.length > 0 && (
-            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full" style={{ backgroundColor: `${color}20`, color }}>
-              {topics.length}
+          {addPanelOpen ? <CaretUp size={14} /> : <CaretDown size={14} />}
+          Add Topics
+          {topics.length > 0 && !addPanelOpen && (
+            <span className="text-[10px] font-mono px-1.5 py-0.5 rounded-full ml-1" style={{ backgroundColor: `${color}20`, color }}>
+              {topics.length} added
             </span>
           )}
         </button>
-      </div>
 
-      {/* ═══ Research Tab ═══ */}
-      {tab === 'research' && (
-        <>
-          {researchState === 'idle' && (
-            <div className="text-center py-16 max-w-[500px] mx-auto">
-              <MagnifyingGlass size={44} weight="light" className="mx-auto mb-5" style={{ color, opacity: 0.85 }} />
-              <h2 className="text-[22px] font-semibold mb-2">Pull real questions from the internet</h2>
-              <p className="text-sm text-neutral-400 leading-relaxed mb-2">
-                Search <span className="font-medium text-neutral-200">{segment?.display_name}</span> communities for real questions people are asking right now.
-              </p>
-              <p className="text-xs text-neutral-500 mb-8">
-                Sources: {segment?.reddit_sources.join(', ')}, Google PAA
-              </p>
+        {addPanelOpen && (
+          <div className="bg-white rounded-xl border border-neutral-200 p-5 animate-in">
+            {/* Three options in a row */}
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              {/* Research button */}
               <button
                 onClick={() => { setResearchState('running'); setVisibleResults([]); }}
-                className="text-white text-sm font-semibold px-7 py-2.5 rounded-[10px] border-none cursor-pointer hover:brightness-110 transition-[filter]"
-                style={{ backgroundColor: color }}
+                disabled={researchState === 'running'}
+                className="p-4 rounded-lg border border-neutral-200 bg-neutral-50 cursor-pointer hover:border-neutral-300 transition-all text-left disabled:opacity-50 disabled:cursor-not-allowed group"
               >
-                Start Research
-              </button>
-            </div>
-          )}
-
-          {(researchState === 'running' || researchState === 'done') && (
-            <div>
-              {researchState === 'running' && (
-                <div className="flex items-center gap-3 mb-4 px-3 py-2.5 rounded-[10px] bg-neutral-800 border border-neutral-700">
-                  <span className="pulse-dot inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                  <span className="text-sm text-neutral-300">Searching <span className="font-medium text-neutral-100">{currentSource}</span>...</span>
-                  <span className="ml-auto text-xs font-mono text-neutral-500">{visibleResults.length}/{allResults.length}</span>
+                <MagnifyingGlass size={20} className="mb-2" style={{ color }} />
+                <div className="text-sm font-semibold text-neutral-700 mb-0.5">Research</div>
+                <div className="text-[11px] text-neutral-400 leading-snug">
+                  Pull questions from {segment?.reddit_sources?.[0] ?? 'Reddit'} + Google
                 </div>
-              )}
+              </button>
 
-              <div className="flex flex-col gap-1.5 mb-4">
-                {visibleResults.map((r, i) => (
-                  <div key={i} className="animate-in bg-neutral-800 rounded-[10px] border border-neutral-700 p-3 px-3.5">
-                    <p className="text-[13.5px] text-neutral-50 leading-relaxed mb-2">"{r.question}"</p>
-                    <div className="flex gap-1.5 flex-wrap items-center">
-                      <span className="text-[10px] font-mono px-[7px] py-[1px] rounded-full bg-neutral-700/50 text-neutral-400">{r.source}</span>
-                      {r.votes && (
-                        <span className="text-[10px] text-neutral-500 flex items-center gap-0.5">
-                          <ArrowUpRight size={10} /> {r.votes}
-                        </span>
-                      )}
-                      <span className="text-[10px] font-mono px-[7px] py-[1px] rounded-full" style={{ color: emotionColor(r.emotion), backgroundColor: `color-mix(in srgb, ${emotionColor(r.emotion)} 12%, transparent)` }}>
-                        {r.emotion}
-                      </span>
-                      {r.trending && (
-                        <span className="text-[10px] font-mono px-[7px] py-[1px] rounded-full flex items-center gap-0.5" style={{ color, backgroundColor: `${color}15` }}>
-                          <TrendUp size={10} /> trending
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {researchState === 'done' && (
-                <div className="flex justify-between items-center mt-4">
-                  <span className="text-neutral-500 text-sm">{visibleResults.length} questions found</span>
+              {/* Paste area */}
+              <div className="p-4 rounded-lg border border-neutral-200 bg-neutral-50">
+                <Plus size={20} className="mb-2 text-neutral-500" />
+                <div className="text-sm font-semibold text-neutral-700 mb-1.5">Paste</div>
+                <textarea
+                  value={pasteText}
+                  onChange={e => setPasteText(e.target.value)}
+                  placeholder="One topic per line..."
+                  className="w-full px-2 py-1.5 rounded-md bg-neutral-50 border border-neutral-200 text-neutral-800 text-[11px] resize-none h-[48px] placeholder:text-neutral-400 focus:border-primary-500 focus:outline-none font-sans"
+                />
+                {pasteText.trim() && (
                   <button
-                    onClick={convertResearchToTopics}
-                    className="text-white text-sm font-semibold px-6 py-2.5 rounded-[10px] border-none cursor-pointer hover:brightness-110 transition-[filter]"
+                    onClick={parsePastedTopics}
+                    className="mt-1.5 text-[11px] font-semibold px-3 py-1 rounded-md border-none text-white cursor-pointer hover:brightness-110 transition-[filter]"
                     style={{ backgroundColor: color }}
                   >
-                    Convert to Topics →
+                    Add
                   </button>
-                </div>
-              )}
+                )}
+              </div>
 
-              {/* ── Google Autocomplete Results ── */}
-              {researchState === 'done' && (
-                <div className="mt-8">
-                  <div className="flex items-center gap-2 mb-3">
-                    <MagnifyingGlass size={14} style={{ color }} />
-                    <span className="text-xs font-mono tracking-wide uppercase text-neutral-500">Google Searches</span>
-                    {autocompleteLoading && (
-                      <span className="pulse-dot inline-block w-1.5 h-1.5 rounded-full ml-1" style={{ backgroundColor: color }} />
+              {/* File upload */}
+              <div
+                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className="p-4 rounded-lg cursor-pointer transition-all"
+                style={{
+                  border: dragOver ? `2px solid ${color}` : '2px dashed var(--color-neutral-300)',
+                  backgroundColor: dragOver ? `${color}10` : 'rgba(250,250,250,0.5)',
+                }}
+              >
+                <UploadSimple size={20} className="mb-2 text-neutral-500" />
+                <div className="text-sm font-semibold text-neutral-700 mb-0.5">Upload</div>
+                <div className="text-[11px] text-neutral-400 leading-snug">
+                  Drop .csv or .json
+                </div>
+              </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".csv,.json"
+                className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
+              />
+            </div>
+
+            {/* Research streaming area */}
+            {researchState === 'running' && (
+              <div className="mt-2">
+                <div className="flex items-center gap-3 mb-3 px-2 py-2 rounded-lg bg-neutral-50">
+                  <span className="pulse-dot inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
+                  <span className="text-sm text-neutral-600">Searching <span className="font-medium text-neutral-800">{currentSource}</span>...</span>
+                  <span className="ml-auto text-xs font-mono text-neutral-400">{visibleResults.length}/{allResults.length}</span>
+                </div>
+                <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
+                  {visibleResults.slice(-5).map((r, i) => (
+                    <div key={i} className="animate-in flex items-center gap-2 px-2 py-1.5 rounded-md text-[12px] text-neutral-600">
+                      <span className="text-neutral-400 font-mono text-[10px] w-8 flex-shrink-0">{r.source.replace('r/', '')}</span>
+                      <span className="flex-1 truncate">{r.question}</span>
+                      {r.trending && <TrendUp size={10} style={{ color }} />}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Google autocomplete results */}
+            {researchState === 'done' && autocompleteSuggestions.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-neutral-200">
+                <div className="text-[10px] text-neutral-400 font-mono uppercase tracking-wide mb-2">Google Suggestions</div>
+                <div className="flex flex-wrap gap-1.5">
+                  {autocompleteSuggestions.map((s, i) => {
+                    const isAdded = addedSuggestionsRef.current.has(s);
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => addSuggestionAsTopic(s)}
+                        disabled={isAdded}
+                        className="text-[11px] px-2.5 py-1 rounded-full border-none cursor-pointer transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                        style={{
+                          backgroundColor: isAdded ? 'var(--color-neutral-200)' : `${color}15`,
+                          color: isAdded ? 'var(--color-neutral-400)' : color,
+                        }}
+                      >
+                        <Plus size={10} weight="bold" />
+                        {s}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Import errors */}
+            {importErrors.length > 0 && (
+              <div className="mt-3 p-2.5 rounded-lg bg-error/10 border border-error/20">
+                {importErrors.map((err, i) => (
+                  <p key={i} className="text-[11px] text-error font-mono">{err}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ═══ Topic List ═══ */}
+      {topics.length > 0 && (
+        <>
+          {/* Header with target indicator and select all */}
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-3">
+              <button
+                onClick={toggleAll}
+                className="flex items-center gap-1.5 text-xs text-neutral-500 bg-transparent border-none cursor-pointer hover:text-neutral-700 transition-colors"
+              >
+                {allSelected ? <CheckSquare size={14} weight="fill" style={{ color }} /> : <Square size={14} />}
+                {allSelected ? 'Deselect all' : 'Select all'}
+              </button>
+              <span className="text-xs text-neutral-400">{selectedCount} of {topics.length} selected</span>
+            </div>
+
+            {/* Target indicator */}
+            <div className="flex items-center gap-2">
+              <div className="w-20 h-1 bg-neutral-200 rounded-full overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-[width] duration-300"
+                  style={{
+                    width: `${Math.min((topics.length / TOPIC_TARGET) * 100, 100)}%`,
+                    backgroundColor: topics.length >= TOPIC_TARGET ? 'var(--color-success)' : color,
+                  }}
+                />
+              </div>
+              <span className="text-[11px] font-mono text-neutral-400">
+                {topics.length}/{TOPIC_TARGET}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-1.5 mb-4">
+            {topics.map(topic => {
+              const isExpanded = expandedTopic === topic.id;
+              return (
+                <div
+                  key={topic.id}
+                  className="bg-white rounded-[10px] border border-neutral-200 transition-[border-color] duration-150"
+                  style={topic.selected ? { borderLeftWidth: 3, borderLeftColor: color } : {}}
+                >
+                  {/* Compact row */}
+                  <div className="flex items-center gap-3 p-3 px-3.5">
+                    <div
+                      onClick={() => toggleTopic(topic.id)}
+                      className="w-4.5 h-4.5 rounded-[4px] flex-shrink-0 flex items-center justify-center cursor-pointer transition-all duration-150"
+                      style={{
+                        width: 18, height: 18,
+                        border: `2px solid ${topic.selected ? color : 'var(--color-neutral-300)'}`,
+                        backgroundColor: topic.selected ? color : 'transparent',
+                      }}
+                    >
+                      {topic.selected && <span className="text-white text-[10px] font-bold">✓</span>}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[13.5px] text-neutral-900 leading-tight">{topic.headline}</span>
+                    </div>
+                    <span
+                      className="text-[10px] font-mono px-[7px] py-[1px] rounded-full flex-shrink-0"
+                      style={{ color: emotionColor(topic.emotion), backgroundColor: `color-mix(in srgb, ${emotionColor(topic.emotion)} 12%, transparent)` }}
+                    >
+                      {topic.emotion}
+                    </span>
+                    {topic.freshness === 'trending' && (
+                      <span className="text-[10px] font-mono px-[7px] py-[1px] rounded-full flex-shrink-0 flex items-center gap-0.5" style={{ color, backgroundColor: `${color}15` }}>
+                        <TrendUp size={9} /> trending
+                      </span>
                     )}
+                    <button
+                      onClick={() => setExpandedTopic(isExpanded ? null : topic.id)}
+                      className="text-neutral-400 hover:text-neutral-500 bg-transparent border-none cursor-pointer text-xs flex-shrink-0"
+                    >
+                      {isExpanded ? <CaretUp size={12} /> : <CaretDown size={12} />}
+                    </button>
+                    <button
+                      onClick={() => removeTopic(topic.id)}
+                      className="text-neutral-400 hover:text-neutral-500 bg-transparent border-none cursor-pointer flex-shrink-0"
+                    >
+                      <X size={12} />
+                    </button>
                   </div>
 
-                  {autocompleteLoading && (
-                    <div className="flex items-center gap-3 px-3 py-2.5 rounded-[10px] bg-neutral-800 border border-neutral-700">
-                      <span className="pulse-dot inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                      <span className="text-sm text-neutral-300">Fetching Google autocomplete suggestions...</span>
-                    </div>
-                  )}
-
-                  {autocompleteError && (
-                    <div className="px-3 py-2.5 rounded-[10px] bg-neutral-800 border border-neutral-700 text-sm text-neutral-400">
-                      Could not load autocomplete suggestions.
-                    </div>
-                  )}
-
-                  {autocompleteSuggestions.length > 0 && (
-                    <div className="flex flex-col gap-1.5">
-                      {autocompleteSuggestions.map((suggestion, i) => {
-                        const isAdded = addedSuggestionsRef.current.has(suggestion);
-                        return (
-                          <div key={i} className="animate-in bg-neutral-800 rounded-[10px] border border-neutral-700 p-3 px-3.5 flex items-center gap-3">
-                            <div className="flex-1 min-w-0">
-                              <p className="text-[13.5px] text-neutral-50 leading-relaxed">{suggestion}</p>
-                              <div className="flex gap-1.5 mt-1.5">
-                                <span className="text-[10px] font-mono px-[7px] py-[1px] rounded-full bg-neutral-700/50 text-neutral-400">Google</span>
-                              </div>
-                            </div>
-                            <button
-                              onClick={() => addSuggestionAsTopic(suggestion)}
-                              disabled={isAdded}
-                              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border-none text-xs font-semibold cursor-pointer hover:brightness-110 transition-[filter] disabled:opacity-30 disabled:cursor-not-allowed flex-shrink-0"
-                              style={{ backgroundColor: isAdded ? 'var(--color-neutral-700)' : `${color}20`, color: isAdded ? 'var(--color-neutral-500)' : color }}
-                            >
-                              <Plus size={12} weight="bold" />
-                              {isAdded ? 'Added' : 'Add'}
-                            </button>
-                          </div>
-                        );
-                      })}
+                  {/* Expanded details */}
+                  {isExpanded && (
+                    <div className="px-3.5 pb-3 pt-0 border-t border-neutral-200/50 ml-[34px]">
+                      <div className="text-[11px] text-neutral-400 mt-2 mb-1">
+                        Source: <em>"{topic.source_question}"</em>
+                      </div>
+                      <div className="text-[11px] text-neutral-400">
+                        Subject line: <span className="text-neutral-500">{topic.suggested_subject_line}</span>
+                      </div>
                     </div>
                   )}
                 </div>
-              )}
-            </div>
-          )}
+              );
+            })}
+          </div>
+
+          {/* Submit */}
+          <div className="flex justify-between items-center mt-5 sticky bottom-0 bg-white/90 backdrop-blur-md py-4 -mx-6 px-6 border-t border-neutral-200">
+            <span className="text-neutral-500 text-sm">{selectedCount} topics selected</span>
+            <button
+              onClick={handleSubmit}
+              disabled={selectedCount < 1}
+              className="text-white text-sm font-semibold px-7 py-2.5 rounded-[10px] border-none cursor-pointer hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed"
+              style={{ backgroundColor: color }}
+            >
+              Generate Content for {selectedCount} →
+            </button>
+          </div>
         </>
       )}
 
-      {/* ═══ Import / Paste Tab ═══ */}
-      {tab === 'import' && (
-        <>
-          {/* Paste zone */}
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-2">
-              <TextT size={14} className="text-neutral-500" />
-              <span className="text-xs text-neutral-500 font-mono tracking-wide uppercase">Paste topics (one per line)</span>
-            </div>
-            <div className="flex gap-2">
-              <textarea
-                value={pasteText}
-                onChange={e => setPasteText(e.target.value)}
-                placeholder={"Why does GLP-1 cause hair loss at month 3?\nIs biotin actually effective for postpartum shedding?\nBest supplements for perimenopause hair thinning"}
-                className="flex-1 px-3 py-2.5 rounded-lg bg-neutral-800 border border-neutral-700 text-neutral-50 text-sm resize-y min-h-[80px] placeholder:text-neutral-600 focus:border-primary-500 focus:outline-none font-sans"
-              />
-              <button
-                onClick={parsePastedTopics}
-                disabled={!pasteText.trim()}
-                className="self-end px-4 py-2.5 rounded-lg border-none text-white text-xs font-semibold cursor-pointer hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ backgroundColor: color }}
-              >
-                Add
-              </button>
-            </div>
-          </div>
-
-          {/* File upload zone */}
-          <div className="mb-5">
-            <div className="flex items-center gap-2 mb-2">
-              <UploadSimple size={14} className="text-neutral-500" />
-              <span className="text-xs text-neutral-500 font-mono tracking-wide uppercase">Or upload CSV / JSON</span>
-            </div>
-            <div
-              onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-              onDragLeave={() => setDragOver(false)}
-              onDrop={handleDrop}
-              onClick={() => fileInputRef.current?.click()}
-              className="h-[80px] rounded-xl cursor-pointer flex items-center justify-center gap-2 transition-all duration-150"
-              style={{
-                border: dragOver ? `2px solid ${color}` : '2px dashed var(--color-neutral-600)',
-                backgroundColor: dragOver ? `${color}10` : 'transparent',
-              }}
-            >
-              <UploadSimple size={18} className="text-neutral-500" />
-              <span className="text-sm text-neutral-500">Drop .csv or .json, or click to browse</span>
-            </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.json"
-              className="hidden"
-              onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }}
-            />
-          </div>
-
-          {/* Import errors */}
-          {importErrors.length > 0 && (
-            <div className="mb-4 p-3 rounded-lg bg-error/10 border border-error/20">
-              {importErrors.map((err, i) => (
-                <p key={i} className="text-xs text-error font-mono">{err}</p>
-              ))}
-            </div>
-          )}
-
-          {/* Topic list */}
-          {topics.length > 0 && (
-            <>
-              <div className="flex justify-between items-center mb-3">
-                <span className="text-sm font-semibold">{topics.length} topics</span>
-                <span className="text-xs text-neutral-500">{selectedCount} selected</span>
-              </div>
-              <div className="flex flex-col gap-1.5 mb-4">
-                {topics.map(topic => (
-                  <div
-                    key={topic.id}
-                    className="bg-neutral-800 rounded-[10px] border border-neutral-700 p-3 px-3.5 transition-[border-color] duration-150"
-                    style={topic.selected ? { borderLeftWidth: 3, borderLeftColor: color, backgroundColor: `${color}08` } : {}}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        onClick={() => toggleTopic(topic.id)}
-                        className="w-5 h-5 rounded-[5px] flex-shrink-0 mt-0.5 flex items-center justify-center cursor-pointer transition-all duration-150"
-                        style={{
-                          border: `2px solid ${topic.selected ? color : 'var(--color-neutral-600)'}`,
-                          backgroundColor: topic.selected ? color : 'transparent',
-                        }}
-                      >
-                        {topic.selected && <span className="text-white text-[11px] font-bold">✓</span>}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[15px] font-serif text-neutral-50 leading-tight mb-1">{topic.headline}</div>
-                        <div className="text-xs text-neutral-500 mb-1.5">Answering: <em>"{topic.source_question}"</em></div>
-                        <div className="flex gap-1.5 flex-wrap items-center">
-                          <span className="text-[10px] font-mono px-[7px] py-[1px] rounded-full" style={{ color: emotionColor(topic.emotion), backgroundColor: `color-mix(in srgb, ${emotionColor(topic.emotion)} 12%, transparent)` }}>
-                            {topic.emotion}
-                          </span>
-                          {topic.freshness === 'trending' && (
-                            <span className="text-[10px] font-mono px-[7px] py-[1px] rounded-full" style={{ color, backgroundColor: `${color}15` }}>trending</span>
-                          )}
-                          <span className="text-[10px] text-neutral-600">✉ {topic.suggested_subject_line}</span>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => removeTopic(topic.id)}
-                        className="text-neutral-600 hover:text-neutral-400 bg-transparent border-none cursor-pointer text-sm"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </>
-          )}
-
-          {/* Submit */}
-          {topics.length > 0 && (
-            <div className="flex justify-between items-center mt-4">
-              <span className="text-neutral-500 text-sm">{selectedCount} topics selected</span>
-              <button
-                onClick={handleSubmit}
-                disabled={selectedCount < 1}
-                className="text-white text-sm font-semibold px-7 py-2.5 rounded-[10px] border-none cursor-pointer hover:brightness-110 transition-[filter] disabled:opacity-40 disabled:cursor-not-allowed"
-                style={{ backgroundColor: color }}
-              >
-                Generate Content for {selectedCount} →
-              </button>
-            </div>
-          )}
-
-          {topics.length === 0 && (
-            <div className="text-center py-10 text-neutral-600 text-sm">
-              No topics yet. Paste some above, upload a CSV, or run research first.
-            </div>
-          )}
-        </>
+      {topics.length === 0 && !addPanelOpen && (
+        <div className="text-center py-10 text-neutral-400 text-sm">
+          No topics yet.{' '}
+          <button onClick={() => setAddPanelOpen(true)} className="text-primary-500 bg-transparent border-none cursor-pointer underline">
+            Add some
+          </button>{' '}
+          to get started.
+        </div>
       )}
     </div>
   );
